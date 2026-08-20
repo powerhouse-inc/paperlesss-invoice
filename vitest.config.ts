@@ -14,6 +14,7 @@ export default defineConfig({
     include: [
       "document-models/**/tests/reducers/**/*.test.ts",
       "document-models/**/tests/document-model.test.ts",
+      "document-models/**/tests/schema/**/*.test.ts",
     ],
     coverage: {
       provider: "v8",

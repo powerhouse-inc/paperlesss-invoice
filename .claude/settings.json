@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsx *)",
+      "Bash(sed -i 's#@powerhousedao/codegen#@powerhousedao/document-engineering/graphql#' repro.mts)",
+      "Bash(sed -i 's#documentModel.global.specifications#documentModel.specifications#' repro.mts)",
+      "Bash(cp repro.mts /home/p/Powerhouse/demos/invoice/repro.mts)",
+      "Bash(curl -s -m 3 -o /dev/null -w \"reactor localhost:4001 -> HTTP %{http_code}\\\\n\" http://localhost:4001/mcp)",
+      "Bash(rm -f /home/p/Powerhouse/demos/paperless-invoice/repro.mts /home/p/Powerhouse/demos/paperless-invoice/repro2.mts /home/p/Powerhouse/demos/invoice/repro.mts && echo \"temp repro files removed\"; echo \"=== do sibling models declare scalars in state schema? ===\"; grep -rl '\"schema\": \"scalar' /home/p/Powerhouse/demos/*/document-models/*/*.json 2>/dev/null | head; echo \"--- vs models that don't ---\"; grep -rl '\"schema\": \"type' /home/p/Powerhouse/demos/*/document-models/*/*.json 2>/dev/null | head -8)",
+      "Bash(timeout 20 switchboard --url http://localhost:4001/graphql docs get dd9db0f6-b0ea-46ef-8892-1fd192b69f4c --format json)",
+      "Bash(node -e ' *)",
+      "Bash(curl -s -m 20 -X POST http://localhost:4001/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"getDocumentModelSchema\",\"arguments\":{\"type\":\"powerhouse/document-model\"}}}' -o /tmp/dm.out)",
+      "Bash(python3 -)",
+      "Bash(node -p \"JSON.stringify\\(require\\('./node_modules/@powerhousedao/reactor-attachments/package.json'\\).exports,null,1\\)\")",
+      "Bash(node -p \"const p=require\\('./package.json'\\); JSON.stringify\\({dep:p.dependencies&&p.dependencies['change-case'],dev:p.devDependencies&&p.devDependencies['change-case']}\\)\")",
+      "Bash(node -e \"import\\('change-case'\\).then\\(m=>console.log\\('yes, constantCase:', m.constantCase\\('setBaseInvoice'\\)\\)\\).catch\\(e=>console.log\\('no:',e.code\\)\\)\")",
+      "Bash(curl -s -m 20 -X POST http://localhost:4001/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/list\",\"params\":{}}' -o /tmp/tools.out)",
+      "Bash(curl -s -m 25 -X POST http://localhost:4001/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"getDocument\",\"arguments\":{\"documentId\":\"dd9db0f6-b0ea-46ef-8892-1fd192b69f4c\"}}}' -o /tmp/doc.out)",
+      "Bash(curl -s -m 25 -X POST http://localhost:4001/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"getDocument\",\"arguments\":{\"id\":\"dd9db0f6-b0ea-46ef-8892-1fd192b69f4c\"}}}' -o /tmp/doc.out)",
+      "Bash(curl -s -m 25 -X POST http://localhost:4001/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"getDocument\",\"arguments\":{\"id\":\"dd9db0f6-b0ea-46ef-8892-1fd192b69f4c\"}}}' -o /tmp/doc2.out)",
+      "Bash(npx oxlint *)",
+      "Bash(python3 -c ' *)",
+      "Bash(unzip -p backup-documents/Invoice.phd header.json)"
+    ],
+    "additionalDirectories": [
+      "/home/p/Powerhouse/demos/invoice"
+    ]
+  }
+}

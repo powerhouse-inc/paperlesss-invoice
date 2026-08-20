@@ -6,7 +6,6 @@ import type {
   AddLineItemInput,
   AddLineItemReceiptInput,
   AddPaymentInput,
-  Address,
   Bank,
   CancelInput,
   ClosePaymentInput,
@@ -29,6 +28,7 @@ import type {
   IntermediaryBank,
   InvoiceAccountType,
   InvoiceAccountTypeInput,
+  InvoiceAddress,
   InvoiceLineItem,
   InvoiceState,
   InvoiceTag,
@@ -154,18 +154,6 @@ export function AddPaymentInputSchema(): z.ZodObject<
   });
 }
 
-export function AddressSchema(): z.ZodObject<Properties<Address>> {
-  return z.object({
-    __typename: z.literal("Address").optional(),
-    city: z.string().nullish(),
-    country: z.string().nullish(),
-    extendedAddress: z.string().nullish(),
-    postalCode: z.string().nullish(),
-    stateProvince: z.string().nullish(),
-    streetAddress: z.string().nullish(),
-  });
-}
-
 export function BankSchema(): z.ZodObject<Properties<Bank>> {
   return z.object({
     __typename: z.literal("Bank").optional(),
@@ -174,7 +162,7 @@ export function BankSchema(): z.ZodObject<Properties<Bank>> {
     SWIFT: z.string().nullish(),
     accountNum: z.string(),
     accountType: InvoiceAccountTypeSchema.nullish(),
-    address: z.lazy(() => AddressSchema()),
+    address: z.lazy(() => InvoiceAddressSchema()),
     beneficiary: z.string().nullish(),
     intermediaryBank: z.lazy(() => IntermediaryBankSchema().nullish()),
     memo: z.string().nullish(),
@@ -415,10 +403,24 @@ export function IntermediaryBankSchema(): z.ZodObject<
     SWIFT: z.string().nullish(),
     accountNum: z.string(),
     accountType: InvoiceAccountTypeSchema.nullish(),
-    address: z.lazy(() => AddressSchema()),
+    address: z.lazy(() => InvoiceAddressSchema()),
     beneficiary: z.string().nullish(),
     memo: z.string().nullish(),
     name: z.string(),
+  });
+}
+
+export function InvoiceAddressSchema(): z.ZodObject<
+  Properties<InvoiceAddress>
+> {
+  return z.object({
+    __typename: z.literal("InvoiceAddress").optional(),
+    city: z.string().nullish(),
+    country: z.string().nullish(),
+    extendedAddress: z.string().nullish(),
+    postalCode: z.string().nullish(),
+    stateProvince: z.string().nullish(),
+    streetAddress: z.string().nullish(),
   });
 }
 
@@ -508,7 +510,7 @@ export function IssueInputSchema(): z.ZodObject<Properties<IssueInput>> {
 export function LegalEntitySchema(): z.ZodObject<Properties<LegalEntity>> {
   return z.object({
     __typename: z.literal("LegalEntity").optional(),
-    address: z.lazy(() => AddressSchema().nullish()),
+    address: z.lazy(() => InvoiceAddressSchema().nullish()),
     contactInfo: z.lazy(() => ContactInfoSchema().nullish()),
     country: z.string().nullish(),
     id: z.lazy(() => LegalEntityIdSchema().nullish()),

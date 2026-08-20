@@ -25,6 +25,7 @@ export type Scalars = {
   Boolean: { input: boolean; output: boolean };
   Int: { input: number; output: number };
   Float: { input: number; output: number };
+  Address: { input: `${string}:0x${string}`; output: `${string}:0x${string}` };
   Amount: {
     input: { unit?: string; value?: number };
     output: { unit?: string; value?: number };
@@ -91,22 +92,13 @@ export type AddPaymentInput = {
   txnRef?: InputMaybe<Scalars["String"]["input"]>;
 };
 
-export type Address = {
-  city: Maybe<Scalars["String"]["output"]>;
-  country: Maybe<Scalars["String"]["output"]>;
-  extendedAddress: Maybe<Scalars["String"]["output"]>;
-  postalCode: Maybe<Scalars["String"]["output"]>;
-  stateProvince: Maybe<Scalars["String"]["output"]>;
-  streetAddress: Maybe<Scalars["String"]["output"]>;
-};
-
 export type Bank = {
   ABA: Maybe<Scalars["String"]["output"]>;
   BIC: Maybe<Scalars["String"]["output"]>;
   SWIFT: Maybe<Scalars["String"]["output"]>;
   accountNum: Scalars["String"]["output"];
   accountType: Maybe<InvoiceAccountType>;
-  address: Address;
+  address: InvoiceAddress;
   beneficiary: Maybe<Scalars["String"]["output"]>;
   intermediaryBank: Maybe<IntermediaryBank>;
   memo: Maybe<Scalars["String"]["output"]>;
@@ -286,7 +278,7 @@ export type IntermediaryBank = {
   SWIFT: Maybe<Scalars["String"]["output"]>;
   accountNum: Scalars["String"]["output"];
   accountType: Maybe<InvoiceAccountType>;
-  address: Address;
+  address: InvoiceAddress;
   beneficiary: Maybe<Scalars["String"]["output"]>;
   memo: Maybe<Scalars["String"]["output"]>;
   name: Scalars["String"]["output"];
@@ -299,6 +291,15 @@ export type InvoiceAccountTypeInput =
   | "SAVINGS"
   | "TRUST"
   | "WALLET";
+
+export type InvoiceAddress = {
+  city: Maybe<Scalars["String"]["output"]>;
+  country: Maybe<Scalars["String"]["output"]>;
+  extendedAddress: Maybe<Scalars["String"]["output"]>;
+  postalCode: Maybe<Scalars["String"]["output"]>;
+  stateProvince: Maybe<Scalars["String"]["output"]>;
+  streetAddress: Maybe<Scalars["String"]["output"]>;
+};
 
 export type InvoiceLineItem = {
   currency: Scalars["String"]["output"];
@@ -356,7 +357,7 @@ export type IssueInput = {
 };
 
 export type LegalEntity = {
-  address: Maybe<Address>;
+  address: Maybe<InvoiceAddress>;
   contactInfo: Maybe<ContactInfo>;
   country: Maybe<Scalars["String"]["output"]>;
   id: Maybe<LegalEntityId>;

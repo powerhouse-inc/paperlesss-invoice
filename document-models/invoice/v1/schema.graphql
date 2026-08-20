@@ -19,8 +19,6 @@ scalar Amount_Crypto
 scalar Amount
 scalar Upload
 
-scalar AttachmentRef
-
 type InvoiceState {
   status: Status!
   invoiceNo: String!
@@ -82,13 +80,13 @@ type Token {
 type LegalEntity {
   id: LegalEntityId
   name: String
-  address: Address
+  address: InvoiceAddress
   contactInfo: ContactInfo
   country: String
   paymentRouting: PaymentRouting
 }
 
-type Address {
+type InvoiceAddress {
   streetAddress: String
   extendedAddress: String
   city: String
@@ -109,7 +107,7 @@ type PaymentRouting {
 
 type Bank {
   name: String!
-  address: Address!
+  address: InvoiceAddress!
   ABA: String
   BIC: String
   SWIFT: String
@@ -122,7 +120,7 @@ type Bank {
 
 type IntermediaryBank {
   name: String!
-  address: Address!
+  address: InvoiceAddress!
   ABA: String
   BIC: String
   SWIFT: String

@@ -15,8 +15,8 @@
   "apps": [],
   "editors": [
     {
-      "name": "invoice-editor",
       "id": "invoice-editor",
+      "name": "invoice-editor",
       "documentTypes": [
         "powerhouse/invoice"
       ]
