@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
   type InvoiceAction,
   type InvoiceDocument,
@@ -21,6 +21,8 @@ import {
 import { focusNextOnEnter, toInputWarnings } from "./utils/inputHelpers.js";
 import { canEditInvoice } from "./utils/invoicePermissions.js";
 import { ReadOnlyRegion } from "./components/readOnlyRegion.js";
+import { PartySummaryCard } from "./components/partySummaryCard.js";
+import { PartyFormModal } from "./components/partyFormModal.js";
 import ConfirmationModal from "./components/confirmationModal.js";
 import {
   ClosePaymentModalContent,
@@ -53,9 +55,15 @@ import { usePdfReview } from "./hooks/usePdfReview.js";
 import { useSyncedField } from "./hooks/useSyncedField.js";
 import { useInvoiceActions } from "./hooks/useInvoiceActions.js";
 import { useAttachmentViewer } from "./hooks/useAttachmentViewer.js";
+import type { ValidationResult } from "./validation/validationManager.js";
 
 // All shared utils (formatNumber, isFiatCurrency, dateToDatetime, datetimeToDate, etc.)
 // are now imported from ./utils/utils.js (Phase 1 consolidation)
+
+/** True when any of the supplied validations has failed. */
+function hasInvalid(...results: (ValidationResult | null)[]): boolean {
+  return results.some((result) => result !== null && !result.isValid);
+}
 
 export default function Editor() {
   const [doc, dispatch] = useSelectedInvoiceDocument() as [
@@ -66,7 +74,7 @@ export default function Editor() {
   const toast = usePHToast();
 
   // Derived early (must be before hooks that use it, per rules)
-  const fiatMode = isFiatCurrency(state?.currency ?? '');
+  const fiatMode = isFiatCurrency(state?.currency ?? "");
 
   // The stored base-invoice attachment ref (null when none attached). Drives the
   // "Upload File" ↔ "View Uploaded Invoice" button and persists across reloads.
@@ -83,6 +91,10 @@ export default function Editor() {
   const uploadDropdown = useDropdown();
   const exportDropdown = useDropdown();
 
+  // Which party form is open. The forms are modals so the editor opens on a
+  // summary of both parties rather than two full-height forms.
+  const [openParty, setOpenParty] = useState<"issuer" | "payer" | null>(null);
+
   // PDF review + export logic extracted to hook (following vercel-react-best-practices:
   // extract complex side-effecty logic, isolate transient review state)
   const pdf = usePdfReview(fiatMode, state, toast, dispatch);
@@ -97,14 +109,15 @@ export default function Editor() {
 
   // Synced input fields isolated (reduces effects in main component, follows skill guidance on effects)
   const invoiceNoField = useSyncedField(state?.invoiceNo, (v) =>
-    dispatch(actions.editInvoice({ invoiceNo: v }))
+    dispatch(actions.editInvoice({ invoiceNo: v })),
   );
   const notesField = useSyncedField(state?.notes, (v) =>
-    dispatch(actions.editInvoice({ notes: v }))
+    dispatch(actions.editInvoice({ notes: v })),
   );
 
   // Validation state consolidated into hook (streamlined)
-  const { validations, validateForStatus, setField } = useInvoiceValidation(isFiatCurrency);
+  const { validations, validateForStatus, setField } =
+    useInvoiceValidation(isFiatCurrency);
 
   // Modal and status workflow state + handlers now in dedicated hook
   const {
@@ -130,29 +143,34 @@ export default function Editor() {
     openModal,
     closeModal: setActiveModalToNull,
     handleContinue,
-  } = useStatusWorkflow(state, dispatch, invoiceNoField.value, invoiceNoField.setValue);
-
+  } = useStatusWorkflow(
+    state,
+    dispatch,
+    invoiceNoField.value,
+    invoiceNoField.setValue,
+  );
 
   // Use dedicated hook for line item editing + live adjusted totals
   // (extracted for readability and easier future extension)
-  const {
-    itemsTotalTaxExcl,
-    itemsTotalTaxIncl,
-    onEditingItemChange,
-  } = useLineItemTotals(state?.lineItems);
+  const { itemsTotalTaxExcl, itemsTotalTaxIncl, onEditingItemChange } =
+    useLineItemTotals(state?.lineItems);
 
   // Invoice actions/handlers extracted (following best practices for extraction)
-  const { handleFileUpload, handleExportUBL, handleStatusChange, handleCurrencyChange } =
-    useInvoiceActions({
-      state,
-      dispatch,
-      toast,
-      pdf,
-      validateForStatus,
-      openModal,
-      setRejectReason,
-      setFinalReason,
-    });
+  const {
+    handleFileUpload,
+    handleExportUBL,
+    handleStatusChange,
+    handleCurrencyChange,
+  } = useInvoiceActions({
+    state,
+    dispatch,
+    toast,
+    pdf,
+    validateForStatus,
+    openModal,
+    setRejectReason,
+    setFinalReason,
+  });
 
   // Dropdown outside-click logic moved to useDropdown hook for cleaner code.
 
@@ -267,6 +285,24 @@ export default function Editor() {
 
   // Handlers now from useInvoiceActions hook (extracted for cleaner main component)
 
+  // A hidden form hides its own validation warnings, so the summary cards
+  // carry a marker when the party's fields failed validation.
+  const issuerNeedsAttention = hasInvalid(
+    validations.mainCountry,
+    validations.streetAddress,
+    validations.city,
+    validations.postalCode,
+    validations.wallet,
+    validations.chain,
+    validations.iban,
+    validations.bic,
+    validations.bankName,
+    validations.bankCountry,
+    validations.routingNumber,
+    validations.accountNumber,
+  );
+  const payerNeedsAttention = hasInvalid(validations.payerEmail);
+
   // Modal content map
   const modalContentMap: Record<string, ReactNode> = {
     issueInvoice: (
@@ -368,8 +404,17 @@ export default function Editor() {
                     invoiceNoField.setValue(val);
                     // Clear previous error if now has a value (so stale warning disappears from input)
                     // Do NOT dispatch here — dispatch only onBlur per project rules (see CLAUDE.md)
-                    if (val && val.trim() !== "" && validations.invoice && !validations.invoice.isValid) {
-                      setField("invoice", { isValid: true, message: "", severity: "none" });
+                    if (
+                      val &&
+                      val.trim() !== "" &&
+                      validations.invoice &&
+                      !validations.invoice.isValid
+                    ) {
+                      setField("invoice", {
+                        isValid: true,
+                        message: "",
+                        severity: "none",
+                      });
                     }
                   }}
                   onBlur={(e) => {
@@ -413,59 +458,59 @@ export default function Editor() {
                   </svg>
                 </button>
               ) : canEdit ? (
-              <div className="relative" ref={uploadDropdown.ref}>
-                <button
-                  onClick={uploadDropdown.toggle}
-                  className="inline-flex items-center h-10 px-4 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors whitespace-nowrap cursor-pointer"
-                  disabled={pdf.isPdfLoading}
-                >
-                  {pdf.isPdfLoading ? "Processing..." : "Upload File"}
-                  <svg
-                    className="w-4 h-4 ml-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
+                <div className="relative" ref={uploadDropdown.ref}>
+                  <button
+                    onClick={uploadDropdown.toggle}
+                    className="inline-flex items-center h-10 px-4 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors whitespace-nowrap cursor-pointer"
+                    disabled={pdf.isPdfLoading}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M19 9l-7 7-7-7"
-                    ></path>
-                  </svg>
-                </button>
-
-                {uploadDropdown.isOpen && !pdf.isPdfLoading && (
-                  <div className="absolute z-10 mt-1 w-48 rounded-md shadow-lg bg-popover text-popover-foreground border border-border">
-                    <div
-                      className="py-1"
-                      role="menu"
-                      aria-orientation="vertical"
+                    {pdf.isPdfLoading ? "Processing..." : "Upload File"}
+                    <svg
+                      className="w-4 h-4 ml-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
                     >
-                      <label className="block px-4 py-2 text-sm text-foreground hover:bg-accent cursor-pointer">
-                        Upload UBL
-                        <input
-                          accept=".xml"
-                          className="hidden"
-                          onChange={(e) => {
-                            handleFileUpload(e);
-                            uploadDropdown.close();
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M19 9l-7 7-7-7"
+                      ></path>
+                    </svg>
+                  </button>
+
+                  {uploadDropdown.isOpen && !pdf.isPdfLoading && (
+                    <div className="absolute z-10 mt-1 w-48 rounded-md shadow-lg bg-popover text-popover-foreground border border-border">
+                      <div
+                        className="py-1"
+                        role="menu"
+                        aria-orientation="vertical"
+                      >
+                        <label className="block px-4 py-2 text-sm text-foreground hover:bg-accent cursor-pointer">
+                          Upload UBL
+                          <input
+                            accept=".xml"
+                            className="hidden"
+                            onChange={(e) => {
+                              handleFileUpload(e);
+                              uploadDropdown.close();
+                            }}
+                            type="file"
+                          />
+                        </label>
+                        <PDFUploader
+                          changeDropdownOpen={(open) => {
+                            if (!open) uploadDropdown.close();
+                            else uploadDropdown.toggle();
                           }}
-                          type="file"
+                          onUploadComplete={pdf.handlePdfUploadComplete}
                         />
-                      </label>
-                      <PDFUploader
-                        changeDropdownOpen={(open) => {
-                          if (!open) uploadDropdown.close();
-                          else uploadDropdown.toggle();
-                        }}
-                        onUploadComplete={pdf.handlePdfUploadComplete}
-                      />
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
               ) : null}
 
               {/* Export Dropdown Button */}
@@ -555,103 +600,65 @@ export default function Editor() {
           </div>
         </div>
 
-        {/* Main Content Grid - Responsive: mobile stacks, tablet+ side-by-side */}
-        <div
-          className="grid gap-6"
-          style={{
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(min(100%, 400px), 1fr))",
-          }}
-        >
-          {/* Issuer Section */}
-          <div className="border border-border rounded-lg p-4 min-w-0 bg-card shadow-sm">
-            <h3 className="text-lg font-semibold mb-4 text-foreground">
-              Issuer
-            </h3>
-            <ReadOnlyRegion editable={canEdit}>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="mb-2 relative isolate">
-                <label className="block mb-1 text-sm text-foreground">
-                  Issue Date:
-                </label>
-                <DatePicker
-                  name="issueDate"
-                  dateFormat="YYYY-MM-DD"
-                  className="w-full bg-background border border-border"
-                  onChange={(e) => {
-                    const dateOnly = e.target.value.split("T")[0];
-                    const datetime = dateToDatetime(dateOnly);
-                    dispatch(
-                      actions.editInvoice({
-                        dateIssued: datetime,
-                      }),
-                    );
-                  }}
-                  value={datetimeToDate(state.dateIssued)}
-                  autoClose={true}
-                />
-              </div>
-              <div className="mb-2 relative isolate">
-                <label className="block mb-1 text-sm text-foreground">
-                  Delivery Date:
-                </label>
-                <DatePicker
-                  name="deliveryDate"
-                  dateFormat="YYYY-MM-DD"
-                  className="w-full bg-background border border-border"
-                  onChange={(e) => {
-                    const dateOnly = e.target.value.split("T")[0];
-                    const datetime = dateToDatetime(dateOnly);
-                    if (datetime !== state.dateDelivered) {
-                      dispatch(
-                        actions.editInvoice({ dateDelivered: datetime }),
-                      );
-                    }
-                  }}
-                  value={datetimeToDate(state.dateDelivered)}
-                  autoClose={true}
-                />
+        {/* Invoice dates. These are invoice-level fields, not party details,
+            so they stay on the page rather than moving into the party modals. */}
+        <ReadOnlyRegion editable={canEdit}>
+          <div
+            className="mb-6 grid gap-4"
+            style={{
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(min(100%, 200px), 1fr))",
+            }}
+          >
+            <div className="relative isolate">
+              <label className="block mb-1 text-sm text-foreground">
+                Issue Date:
+              </label>
+              <div className="w-64">
+              <DatePicker
+                name="issueDate"
+                dateFormat="YYYY-MM-DD"
+                className="w-full bg-background border border-border"
+                onChange={(e) => {
+                  const dateOnly = e.target.value.split("T")[0];
+                  const datetime = dateToDatetime(dateOnly);
+                  dispatch(
+                    actions.editInvoice({
+                      dateIssued: datetime,
+                    }),
+                  );
+                }}
+                value={datetimeToDate(state.dateIssued)}
+                autoClose={true}
+              />
               </div>
             </div>
-            <LegalEntityForm
-              legalEntity={state.issuer}
-              onChangeInfo={(input) => dispatch(actions.editIssuer(input))}
-              onChangeBank={(input) => dispatch(actions.editIssuerBank(input))}
-              onChangeWallet={(input) =>
-                dispatch(actions.editIssuerWallet(input))
-              }
-              basicInfoDisabled={false}
-              bankDisabled={!fiatMode}
-              walletDisabled={fiatMode}
-              currency={state.currency}
-              status={state.status}
-              walletvalidation={validations.wallet}
-              chainvalidation={validations.chain}
-              mainCountryValidation={validations.mainCountry}
-              bankCountryValidation={validations.bankCountry}
-              ibanvalidation={validations.iban}
-              bicvalidation={validations.bic}
-              banknamevalidation={validations.bankName}
-              streetaddressvalidation={validations.streetAddress}
-              cityvalidation={validations.city}
-              postalcodevalidation={validations.postalCode}
-              payeremailvalidation={validations.payerEmail}
-              routingNumbervalidation={validations.routingNumber}
-              accountNumbervalidation={validations.accountNumber}
-            />
-            </ReadOnlyRegion>
-          </div>
-
-          {/* Payer Section */}
-          <div className="border border-border rounded-lg p-4 min-w-0 bg-card shadow-sm">
-            <h3 className="text-lg font-semibold mb-4 text-foreground">
-              Payer
-            </h3>
-            <ReadOnlyRegion editable={canEdit}>
-            <div className="mb-2 w-64 relative isolate">
+            <div className="relative isolate">
+              <label className="block mb-1 text-sm text-foreground">
+                Delivery Date:
+              </label>
+              <div className="w-64">
+              <DatePicker
+                name="deliveryDate"
+                dateFormat="YYYY-MM-DD"
+                className="w-full bg-background border border-border"
+                onChange={(e) => {
+                  const dateOnly = e.target.value.split("T")[0];
+                  const datetime = dateToDatetime(dateOnly);
+                  if (datetime !== state.dateDelivered) {
+                    dispatch(actions.editInvoice({ dateDelivered: datetime }));
+                  }
+                }}
+                value={datetimeToDate(state.dateDelivered)}
+                autoClose={true}
+              />
+              </div>
+            </div>
+            <div className="relative isolate">
               <label className="block mb-1 text-sm text-foreground">
                 Due Date:
               </label>
+              <div className="w-64">
               <DatePicker
                 name="dateDue"
                 dateFormat="YYYY-MM-DD"
@@ -668,17 +675,34 @@ export default function Editor() {
                 value={datetimeToDate(state.dateDue)}
                 autoClose={true}
               />
+              </div>
             </div>
-            <LegalEntityForm
-              bankDisabled
-              legalEntity={state.payer}
-              onChangeInfo={(input) => dispatch(actions.editPayer(input))}
-              currency={state.currency}
-              status={state.status}
-              payeremailvalidation={validations.payerEmail}
-            />
-            </ReadOnlyRegion>
           </div>
+        </ReadOnlyRegion>
+
+        {/* Party summaries. The full forms are in the modals at the end of the
+            component, opened from these cards. */}
+        <div
+          className="mb-6 grid gap-6"
+          style={{
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(min(100%, 400px), 1fr))",
+          }}
+        >
+          <PartySummaryCard
+            title="Issuer"
+            entity={state.issuer}
+            editable={canEdit}
+            needsAttention={issuerNeedsAttention}
+            onEdit={() => setOpenParty("issuer")}
+          />
+          <PartySummaryCard
+            title="Payer"
+            entity={state.payer}
+            editable={canEdit}
+            needsAttention={payerNeedsAttention}
+            onEdit={() => setOpenParty("payer")}
+          />
         </div>
 
         {/* Line Items Table */}
@@ -761,8 +785,59 @@ export default function Editor() {
             {modalContentMap[activeModal]}
           </ConfirmationModal>
         )}
-
       </div>
+
+      <PartyFormModal
+        open={openParty === "issuer"}
+        title="Issuer details"
+        onClose={() => setOpenParty(null)}
+      >
+        <ReadOnlyRegion editable={canEdit}>
+          <LegalEntityForm
+            legalEntity={state.issuer}
+            onChangeInfo={(input) => dispatch(actions.editIssuer(input))}
+            onChangeBank={(input) => dispatch(actions.editIssuerBank(input))}
+            onChangeWallet={(input) =>
+              dispatch(actions.editIssuerWallet(input))
+            }
+            basicInfoDisabled={false}
+            bankDisabled={!fiatMode}
+            walletDisabled={fiatMode}
+            currency={state.currency}
+            status={state.status}
+            walletvalidation={validations.wallet}
+            chainvalidation={validations.chain}
+            mainCountryValidation={validations.mainCountry}
+            bankCountryValidation={validations.bankCountry}
+            ibanvalidation={validations.iban}
+            bicvalidation={validations.bic}
+            banknamevalidation={validations.bankName}
+            streetaddressvalidation={validations.streetAddress}
+            cityvalidation={validations.city}
+            postalcodevalidation={validations.postalCode}
+            payeremailvalidation={validations.payerEmail}
+            routingNumbervalidation={validations.routingNumber}
+            accountNumbervalidation={validations.accountNumber}
+          />
+        </ReadOnlyRegion>
+      </PartyFormModal>
+
+      <PartyFormModal
+        open={openParty === "payer"}
+        title="Payer details"
+        onClose={() => setOpenParty(null)}
+      >
+        <ReadOnlyRegion editable={canEdit}>
+          <LegalEntityForm
+            bankDisabled
+            legalEntity={state.payer}
+            onChangeInfo={(input) => dispatch(actions.editPayer(input))}
+            currency={state.currency}
+            status={state.status}
+            payeremailvalidation={validations.payerEmail}
+          />
+        </ReadOnlyRegion>
+      </PartyFormModal>
 
       <PDFReviewModal
         open={pdf.pdfReviewData !== null}

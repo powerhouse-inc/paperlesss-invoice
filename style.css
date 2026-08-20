@@ -53,6 +53,20 @@ label[class*="inline-flex items-center text-sm font-medium"] {
    with tokens (correct in both light and dark). The panel surface itself is
    themed by the editor's `contentClassName="bg-popover border border-border"`. */
 
+/* Panel surface fallback. `PopoverContent` ships no background of its own, so
+   every Select is expected to supply one via `contentClassName`. Some wrappers
+   cannot: `CountryCodePicker` forwards `...props` to Select at runtime, but its
+   prop type is `ButtonHTMLAttributes`, so `contentClassName` does not type
+   check. With no surface the dropdown renders transparent and whatever sits
+   behind it shows through — obvious once the party forms moved into a modal,
+   where the list overlaps the fields below it. Default the inner content box
+   instead. Call sites that DO pass `contentClassName` name the same `--popover`
+   token, so this is a no-op for them. */
+.select__content {
+  background-color: var(--popover);
+  border-radius: 0.5rem;
+}
+
 /* Trigger hover. Only the Select trigger carries BOTH `dark:bg-charcoal-900`
    and `hover:bg-gray-100`, so this matches it without touching text inputs. */
 [class*="dark:bg-charcoal-900"][class*="hover:bg-gray-100"]:hover {
