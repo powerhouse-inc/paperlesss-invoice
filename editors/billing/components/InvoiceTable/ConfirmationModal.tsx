@@ -1,0 +1,57 @@
+import type React from "react";
+
+interface ConfirmationModalProps {
+  open: boolean;
+  header: React.ReactNode;
+  onCancel: () => void;
+  onContinue: () => void;
+  cancelLabel?: string;
+  continueLabel?: string;
+  children?: React.ReactNode;
+  continueDisabled?: boolean;
+}
+
+export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
+  open,
+  header,
+  onCancel,
+  onContinue,
+  cancelLabel = "Cancel",
+  continueLabel = "Continue",
+  children,
+  continueDisabled = false,
+}) => {
+  if (!open) return null;
+
+  return (
+    <div className="contributor-billing-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md">
+      <div className="bg-card rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div className="border-b border-border pb-3 text-xl font-semibold text-foreground">
+          {header}
+        </div>
+        <div className="my-5 rounded-lg bg-muted p-4 text-center flex flex-col items-center justify-center min-h-[64px]">
+          {children}
+        </div>
+        <div className="mt-6 flex justify-between gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 min-h-[44px] min-w-[120px] text-sm font-medium py-2.5 px-5 rounded-lg outline-none active:opacity-75 hover:bg-accent transition-colors bg-muted text-foreground"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onContinue}
+            disabled={continueDisabled}
+            className={`flex-1 min-h-[44px] min-w-[120px] text-sm font-medium py-2.5 px-5 rounded-lg outline-none active:opacity-75 transition-colors bg-primary text-primary-foreground hover:bg-primary/90 ${
+              continueDisabled ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+          >
+            {continueLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

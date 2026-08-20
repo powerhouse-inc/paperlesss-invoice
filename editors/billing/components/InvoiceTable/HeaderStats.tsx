@@ -1,0 +1,167 @@
+import { Select } from "@powerhousedao/document-engineering/ui";
+import { useState, useEffect, useMemo } from "react";
+import {
+  useDocumentsInSelectedDrive,
+  useSelectedDrive,
+  isFileNodeKind,
+} from "@powerhousedao/reactor-browser";
+import { getExchangeRate } from "../../utils/exchangeRate.js";
+import { Tooltip, TooltipProvider } from "@powerhousedao/design-system/ui";
+import { cbToast } from "../cbToast.js";
+import type { InvoiceDocument } from "document-models/invoice";
+
+const currencyList = [
+  { ticker: "USDS", crypto: true },
+  { ticker: "USDC", crypto: true },
+  { ticker: "DAI", crypto: true },
+  { ticker: "EURC", crypto: true },
+  { ticker: "EURE", crypto: true },
+  { ticker: "USD", crypto: false },
+  { ticker: "EUR", crypto: false },
+  { ticker: "DKK", crypto: false },
+  { ticker: "GBP", crypto: false },
+  { ticker: "JPY", crypto: false },
+  { ticker: "CNY", crypto: false },
+  { ticker: "CHF", crypto: false },
+];
+
+interface HeaderStatsProps {
+  /** The ID of the payments folder to filter invoices by */
+  folderId: string;
+}
+
+export const HeaderStats = ({ folderId }: HeaderStatsProps) => {
+  const [selectedCurrency, setSelectedCurrency] = useState("USD");
+  const [totalExpenses, setTotalExpenses] = useState(0);
+  const [driveDocument] = useSelectedDrive();
+
+  // Filter invoice files to only those in the specific payments folder
+  const invoiceFiles = useMemo(() => {
+    if (!driveDocument) return [];
+    const nodes = driveDocument.state.global.nodes;
+    return nodes
+      .filter(
+        (node) =>
+          isFileNodeKind(node) &&
+          node.parentFolder === folderId &&
+          node.documentType === "powerhouse/invoice",
+      )
+      .map((node) => node.id);
+  }, [driveDocument, folderId]);
+
+  const allDocuments = useDocumentsInSelectedDrive();
+  const invoices = useMemo(() => {
+    if (invoiceFiles.length === 0) return [];
+    const invoiceSet = new Set(invoiceFiles);
+    return (allDocuments ?? []).filter(
+      (doc): doc is InvoiceDocument =>
+        doc.header.documentType === "powerhouse/invoice" &&
+        invoiceSet.has(doc.header.id),
+    );
+  }, [allDocuments, invoiceFiles]);
+
+  useEffect(() => {
+    const calculateTotalExpenses = async () => {
+      if (!invoices || !Array.isArray(invoices) || invoices.length === 0) {
+        setTotalExpenses(0);
+        return;
+      }
+
+      let total = 0;
+      let conversionFailed = false;
+      for (const invoice of invoices) {
+        const invoiceAmount = invoice.state.global.totalPriceTaxIncl;
+        const invoiceCurrency = invoice.state.global.currency || "USD"; // Fallback to USD if currency is empty
+
+        if (invoiceCurrency === selectedCurrency) {
+          total += invoiceAmount;
+        } else {
+          try {
+            // getExchangeRate resolves stablecoins to their fiat peg internally,
+            // so the raw invoice/selected currencies can be passed through.
+            const exchangeRate = await getExchangeRate(
+              invoiceCurrency,
+              selectedCurrency,
+              invoiceAmount,
+            );
+            total += invoiceAmount * exchangeRate;
+          } catch (error) {
+            console.error("Error getting exchange rate:", error);
+            // Fallback to original amount if exchange rate fails
+            total += invoiceAmount;
+            conversionFailed = true;
+          }
+        }
+      }
+      setTotalExpenses(total);
+
+      if (conversionFailed) {
+        cbToast(
+          "Currency conversion failed for some invoices — totals shown using 1:1 fallback rate",
+          { type: "warning" },
+        );
+      }
+    };
+
+    calculateTotalExpenses().catch(console.error);
+  }, [invoices, selectedCurrency]);
+
+  const currencyOptions = currencyList.map((currency) => ({
+    label: currency.ticker,
+    value: currency.ticker,
+  }));
+
+  return (
+    <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
+      <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+        {/* Header with Currency Selector */}
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-base font-semibold text-foreground">Overview</h1>
+          <div className="max-w-[200px]">
+            <Select
+              style={{ width: "200px" }}
+              options={currencyOptions}
+              value={selectedCurrency}
+              onChange={(value) => setSelectedCurrency(value as string)}
+              placeholder="Select Currency"
+            />
+          </div>
+        </div>
+
+        {/* Main Content - Stats */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-muted rounded-lg p-3">
+            <div className="flex items-center gap-1 mb-1">
+              <h3 className="text-xs font-medium text-muted-foreground">
+                Total Expenses
+              </h3>
+              <Tooltip
+                content="Approximate value calculated using exchangerate-api.com. DAI + USDS are converted to USD for simplicity"
+                side="right"
+              >
+                <div className="w-4 h-4 rounded-full bg-muted text-muted-foreground text-xs flex items-center justify-center cursor-help">
+                  !
+                </div>
+              </Tooltip>
+            </div>
+            <p className="text-lg font-bold text-foreground">
+              {selectedCurrency}{" "}
+              {totalExpenses.toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </p>
+          </div>
+          <div className="bg-muted rounded-lg p-3">
+            <h3 className="text-xs font-medium text-muted-foreground mb-1">
+              Total Invoices
+            </h3>
+            <p className="text-lg font-bold text-foreground">
+              {invoices?.length}
+            </p>
+          </div>
+        </div>
+      </TooltipProvider>
+    </div>
+  );
+};

@@ -67,6 +67,43 @@ label[class*="inline-flex items-center text-sm font-medium"] {
   border-radius: 0.5rem;
 }
 
+/* Multi-select "Select All" row. Regular options carry `.select__list-item`,
+   which the rules below theme -- but the Select All row is a bare cmdk item
+   with only `data-[selected=true]:bg-gray-100` (near-white; cmdk highlights
+   the first row automatically on open, so in dark mode it renders as a white
+   box) and its checkbox square ships `border-gray-700 dark:border-gray-400`,
+   whose dark variant never generates -> invisible checkbox. Generalize the
+   theming to every cmdk item inside a select panel so no row can miss it. */
+.select__content [cmdk-item] {
+  color: var(--foreground);
+  border-color: transparent !important;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+/* Search box and empty message follow the same scale as the rows. */
+.select__content .select__search,
+.select__content [cmdk-input],
+.select__content [cmdk-empty] {
+  font-size: 0.75rem;
+}
+.select__content [cmdk-item][data-selected="true"],
+.select__content [cmdk-item]:hover {
+  background-color: color-mix(
+    in oklab,
+    var(--foreground) 12%,
+    transparent
+  ) !important;
+}
+/* Checkbox squares anywhere in the panel (not only under .select__list-item):
+   empty state follows the border token, filled state becomes primary. */
+.select__content [cmdk-item] [class*="border-gray-700"] {
+  border-color: var(--border) !important;
+}
+.select__content [cmdk-item] [class*="bg-gray-900"] {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
 /* Trigger hover. Only the Select trigger carries BOTH `dark:bg-charcoal-900`
    and `hover:bg-gray-100`, so this matches it without touching text inputs. */
 [class*="dark:bg-charcoal-900"][class*="hover:bg-gray-100"]:hover {
@@ -372,4 +409,99 @@ div:has(> .select__search) {
 }
 .dark [data-type="warning"] {
   color: var(--color-orange-300, var(--color-red-400)) !important;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   document-engineering Sidebar (Billing app folder tree)
+   ──────────────────────────────────────────────────────────────────────────
+   Like the Select/DatePicker above, the Sidebar styles itself with Tailwind
+   utilities inside its own dist JS ('bg-gray-50 dark:bg-slate-600',
+   'py-1.5', 'hover:bg-gray-100', ...). Utilities that only occur there never
+   get generated in this project's build (bg-gray-50: 0 hits in dist css), so
+   the sidebar renders half-styled: no panel surface, no row padding, default
+   focus rectangle on the title. Theme it via its BEM hook classes, scoped to
+   the Billing tree (`.folder-tree-sidebar`), with tokens so both light and
+   dark are correct. */
+.folder-tree-sidebar.sidebar__container {
+  background-color: var(--card);
+  border-right: 1px solid var(--border);
+  height: 100%;
+  max-height: 100%;
+}
+.folder-tree-sidebar .sidebar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background-color: transparent;
+}
+.folder-tree-sidebar .sidebar__header-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+/* The title is focusable; without the (ungenerated) component styles it shows
+   the UA's default focus rectangle. Replace it with the app's ring. */
+.folder-tree-sidebar .sidebar__header-title:focus,
+.folder-tree-sidebar .sidebar__header-title:focus-visible {
+  outline: none;
+  border-radius: 0.25rem;
+  box-shadow: 0 0 0 1px var(--ring, var(--border));
+}
+.folder-tree-sidebar .sidebar__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  user-select: none;
+}
+.folder-tree-sidebar .sidebar__item:hover {
+  background-color: color-mix(in oklab, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+}
+.folder-tree-sidebar .sidebar__item--active,
+.folder-tree-sidebar .sidebar__item--active:hover {
+  background-color: color-mix(in oklab, var(--foreground) 12%, transparent);
+  color: var(--foreground);
+  font-weight: 500;
+}
+.folder-tree-sidebar .sidebar__item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* The title span carries its own `text-sm` utility (14px), which outranks
+     the row's inherited size -- restate the compact size at higher
+     specificity. */
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+.folder-tree-sidebar .sidebar__item-caret {
+  border-radius: 0.375rem;
+  padding: 0.25rem;
+  color: var(--muted-foreground);
+}
+.folder-tree-sidebar .sidebar__item-caret svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.folder-tree-sidebar .sidebar__item-caret:hover {
+  background-color: color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+/* List area: breathing room around the tree. The scrollable content wrapper
+   exposes no BEM hook (only 'flex flex-1 flex-col gap-1 overflow-y-auto', and
+   those utilities DO generate here), so pad it structurally: it is the
+   container's flex-1 child. :where keeps specificity at zero. */
+.folder-tree-sidebar.sidebar__container > :where(.flex-1.overflow-y-auto) {
+  padding: 0.5rem;
+}
+.folder-tree-sidebar .sidebar__pinning-area {
+  padding: 0.5rem;
 }

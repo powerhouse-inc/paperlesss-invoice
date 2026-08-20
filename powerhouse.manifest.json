@@ -12,7 +12,15 @@
       "name": "Invoice"
     }
   ],
-  "apps": [],
+  "apps": [
+    {
+      "name": "billing",
+      "id": "billing",
+      "documentTypes": [
+        "powerhouse/document-drive"
+      ]
+    }
+  ],
   "editors": [
     {
       "id": "invoice-editor",
