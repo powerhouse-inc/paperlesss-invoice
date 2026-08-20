@@ -614,7 +614,7 @@ export default function Editor() {
               <label className="block mb-1 text-sm text-foreground">
                 Issue Date:
               </label>
-              <div className="w-64">
+              <div className="w-full">
               <DatePicker
                 name="issueDate"
                 dateFormat="YYYY-MM-DD"
@@ -637,7 +637,7 @@ export default function Editor() {
               <label className="block mb-1 text-sm text-foreground">
                 Delivery Date:
               </label>
-              <div className="w-64">
+              <div className="w-full">
               <DatePicker
                 name="deliveryDate"
                 dateFormat="YYYY-MM-DD"
@@ -658,7 +658,7 @@ export default function Editor() {
               <label className="block mb-1 text-sm text-foreground">
                 Due Date:
               </label>
-              <div className="w-64">
+              <div className="w-full">
               <DatePicker
                 name="dateDue"
                 dateFormat="YYYY-MM-DD"
@@ -749,7 +749,7 @@ export default function Editor() {
                   onChange={(e) => {
                     notesField.setValue(e.target.value);
                   }}
-                  className="p-2 mb-4 text-foreground placeholder:text-muted-foreground border-border"
+                  className="p-2 mb-4 bg-card text-foreground placeholder:text-muted-foreground border-border"
                 />
               </ReadOnlyRegion>
             </div>

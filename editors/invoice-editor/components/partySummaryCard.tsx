@@ -17,18 +17,25 @@ interface PartySummaryCardProps {
   readonly editable?: boolean;
 }
 
-/** A summary row. Renders a muted dash when the value is missing. */
+/**
+ * One label/value pair, label first on the same line.
+ *
+ * Laid out with flex rather than a two-column grid: Tailwind does not generate
+ * arbitrary `grid-cols-[...]` utilities in this project (which is why
+ * `editor.tsx` sets `gridTemplateColumns` through inline styles), so a grid
+ * class here silently does nothing and the pairs stack.
+ */
 function Row({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="flex gap-2 text-sm">
-      <span className="shrink-0 text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-foreground">
+    <div className="flex gap-1.5 text-sm">
+      <dt className="shrink-0 text-muted-foreground">{label}:</dt>
+      <dd className="min-w-0 truncate text-foreground">
         {value?.trim() ? (
           value
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
-      </span>
+      </dd>
     </div>
   );
 }
@@ -57,7 +64,7 @@ export function PartySummaryCard({
 
   return (
     <div className="min-w-0 rounded-lg border border-border bg-card p-4 shadow-sm">
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="mb-4 flex items-center justify-between gap-2 border-b border-border pb-3">
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-semibold text-foreground">{title}</h3>
           {needsAttention && (
@@ -82,17 +89,19 @@ export function PartySummaryCard({
           No {title.toLowerCase()} details yet.
         </p>
       ) : (
-        <div className="flex flex-col gap-1.5">
-          <p className="truncate text-base font-medium text-foreground">
+        <div>
+          <p className="truncate text-lg font-medium text-foreground">
             {name.trim() ? (
               name
             ) : (
               <span className="text-muted-foreground">Unnamed</span>
             )}
           </p>
-          <Row label="Tax ID" value={taxId} />
-          <Row label="Location" value={location} />
-          <Row label="Email" value={email} />
+          <dl className="mt-2 flex flex-col gap-1.5">
+            <Row label="Tax ID" value={taxId} />
+            <Row label="Location" value={location} />
+            <Row label="Email" value={email} />
+          </dl>
         </div>
       )}
     </div>
