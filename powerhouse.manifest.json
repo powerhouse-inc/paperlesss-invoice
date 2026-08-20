@@ -1,0 +1,35 @@
+{
+  "name": "paperless-invoice",
+  "description": "",
+  "category": "",
+  "publisher": {
+    "name": "",
+    "url": ""
+  },
+  "documentModels": [
+    {
+      "id": "powerhouse/invoice",
+      "name": "Invoice"
+    }
+  ],
+  "apps": [],
+  "editors": [
+    {
+      "id": "editor",
+      "name": "editor",
+      "documentTypes": [
+        "powerhouse/invoice"
+      ]
+    },
+    {
+      "name": "invoice-editor",
+      "id": "invoice-editor",
+      "documentTypes": [
+        "powerhouse/invoice"
+      ]
+    }
+  ],
+  "processors": [],
+  "subgraphs": [],
+  "config": []
+}
