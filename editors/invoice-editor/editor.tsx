@@ -384,19 +384,21 @@ export default function Editor() {
   return (
     <div className="w-full min-h-full flex flex-col invoice-editor">
       <DocumentToolbar />
-      <div className="flex-1 max-w-7xl mx-auto w-full mt-4 px-4 pb-8">
-        {/* Header Section */}
-        <div className="mb-6">
-          {/* Header - responsive via flex-wrap */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* Top navbar. Full-bleed so its bottom border reaches both editor
+          edges, with the controls held to the same max-w-7xl column as the
+          content below. Groups match the two clusters already in use: identity
+          and file actions left, currency and status right. */}
+      <div className="w-full border-b border-border">
+        <div className="mx-auto w-full max-w-7xl px-4 py-3">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             {/* Left side with Invoice title, input, and upload */}
-            <div className="flex flex-wrap items-center gap-4">
-              <h1 className="text-3xl font-bold whitespace-nowrap text-foreground">
+            <div className="flex flex-wrap items-start gap-4">
+              <h1 className="flex h-8 items-center text-md font-bold whitespace-nowrap text-foreground">
                 Invoice
               </h1>
               <ReadOnlyRegion editable={canEdit} className="min-w-[200px]">
                 <TextInput
-                  className="border-border"
+                  className="h-8 text-xs border-border"
                   placeholder={"Add invoice number"}
                   value={invoiceNoField.value}
                   onChange={(e) => {
@@ -433,7 +435,7 @@ export default function Editor() {
                 <button
                   onClick={() => void viewer.view(baseInvoiceRef)}
                   disabled={viewer.isLoading}
-                  className="inline-flex items-center h-10 px-4 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors whitespace-nowrap cursor-pointer disabled:opacity-60"
+                  className="inline-flex items-center h-8 px-3 rounded text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors whitespace-nowrap cursor-pointer disabled:opacity-60"
                 >
                   {viewer.isLoading ? "Loading…" : "View Uploaded Invoice"}
                   <svg
@@ -461,7 +463,7 @@ export default function Editor() {
                 <div className="relative" ref={uploadDropdown.ref}>
                   <button
                     onClick={uploadDropdown.toggle}
-                    className="inline-flex items-center h-10 px-4 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors whitespace-nowrap cursor-pointer"
+                    className="inline-flex items-center h-8 px-3 rounded text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors whitespace-nowrap cursor-pointer"
                     disabled={pdf.isPdfLoading}
                   >
                     {pdf.isPdfLoading ? "Processing..." : "Upload File"}
@@ -517,7 +519,7 @@ export default function Editor() {
               <div className="relative" ref={exportDropdown.ref}>
                 <button
                   onClick={exportDropdown.toggle}
-                  className="inline-flex items-center h-10 px-4 rounded border border-input bg-background text-foreground hover:bg-accent font-medium transition-colors whitespace-nowrap cursor-pointer"
+                  className="inline-flex items-center h-8 px-3 rounded text-xs border border-input bg-background text-foreground hover:bg-accent font-medium transition-colors whitespace-nowrap cursor-pointer"
                 >
                   Export File
                   <svg
@@ -568,25 +570,27 @@ export default function Editor() {
             </div>
 
             {/* Currency selector and Status */}
-            <div className="flex flex-row items-center gap-4">
+            <div className="flex flex-row items-start gap-4">
               <ReadOnlyRegion editable={canEdit}>
-                <Select
-                  options={currencyList.map((c) => ({
-                    label: c.ticker,
-                    value: c.ticker,
-                  }))}
-                  value={state.currency}
-                  placeholder="Currency"
-                  searchable={false}
-                  onChange={(value) =>
-                    handleCurrencyChange(
-                      (Array.isArray(value) ? value[0] : value) || "",
-                    )
-                  }
-                  warnings={toInputWarnings(validations.currency)}
-                  className="w-32 text-foreground border-border"
-                  contentClassName="bg-popover border border-border"
-                />
+                <div className="w-full">
+                  <Select
+                    options={currencyList.map((c) => ({
+                      label: c.ticker,
+                      value: c.ticker,
+                    }))}
+                    value={state.currency}
+                    placeholder="Currency"
+                    searchable
+                    onChange={(value) =>
+                      handleCurrencyChange(
+                        (Array.isArray(value) ? value[0] : value) || "",
+                      )
+                    }
+                    warnings={toInputWarnings(validations.currency)}
+                    className="h-8 text-xs text-foreground border-border"
+                    contentClassName="w-48 bg-popover border border-border"
+                  />
+                </div>
               </ReadOnlyRegion>
 
               {/* Status stays editable in every status — it is the workflow
@@ -599,7 +603,9 @@ export default function Editor() {
             </div>
           </div>
         </div>
+      </div>
 
+      <div className="flex-1 max-w-7xl mx-auto w-full mt-6 px-4 pb-8">
         {/* Invoice dates. These are invoice-level fields, not party details,
             so they stay on the page rather than moving into the party modals. */}
         <ReadOnlyRegion editable={canEdit}>
@@ -615,22 +621,22 @@ export default function Editor() {
                 Issue Date:
               </label>
               <div className="w-full">
-              <DatePicker
-                name="issueDate"
-                dateFormat="YYYY-MM-DD"
-                className="w-full bg-background border border-border"
-                onChange={(e) => {
-                  const dateOnly = e.target.value.split("T")[0];
-                  const datetime = dateToDatetime(dateOnly);
-                  dispatch(
-                    actions.editInvoice({
-                      dateIssued: datetime,
-                    }),
-                  );
-                }}
-                value={datetimeToDate(state.dateIssued)}
-                autoClose={true}
-              />
+                <DatePicker
+                  name="issueDate"
+                  dateFormat="YYYY-MM-DD"
+                  className="w-full bg-background border border-border"
+                  onChange={(e) => {
+                    const dateOnly = e.target.value.split("T")[0];
+                    const datetime = dateToDatetime(dateOnly);
+                    dispatch(
+                      actions.editInvoice({
+                        dateIssued: datetime,
+                      }),
+                    );
+                  }}
+                  value={datetimeToDate(state.dateIssued)}
+                  autoClose={true}
+                />
               </div>
             </div>
             <div className="relative isolate">
@@ -638,20 +644,22 @@ export default function Editor() {
                 Delivery Date:
               </label>
               <div className="w-full">
-              <DatePicker
-                name="deliveryDate"
-                dateFormat="YYYY-MM-DD"
-                className="w-full bg-background border border-border"
-                onChange={(e) => {
-                  const dateOnly = e.target.value.split("T")[0];
-                  const datetime = dateToDatetime(dateOnly);
-                  if (datetime !== state.dateDelivered) {
-                    dispatch(actions.editInvoice({ dateDelivered: datetime }));
-                  }
-                }}
-                value={datetimeToDate(state.dateDelivered)}
-                autoClose={true}
-              />
+                <DatePicker
+                  name="deliveryDate"
+                  dateFormat="YYYY-MM-DD"
+                  className="w-full bg-background border border-border"
+                  onChange={(e) => {
+                    const dateOnly = e.target.value.split("T")[0];
+                    const datetime = dateToDatetime(dateOnly);
+                    if (datetime !== state.dateDelivered) {
+                      dispatch(
+                        actions.editInvoice({ dateDelivered: datetime }),
+                      );
+                    }
+                  }}
+                  value={datetimeToDate(state.dateDelivered)}
+                  autoClose={true}
+                />
               </div>
             </div>
             <div className="relative isolate">
@@ -659,22 +667,22 @@ export default function Editor() {
                 Due Date:
               </label>
               <div className="w-full">
-              <DatePicker
-                name="dateDue"
-                dateFormat="YYYY-MM-DD"
-                className="w-full bg-background border border-border"
-                onChange={(e) => {
-                  const dateOnly = e.target.value.split("T")[0];
-                  const datetime = dateToDatetime(dateOnly);
-                  dispatch(
-                    actions.editInvoice({
-                      dateDue: datetime,
-                    }),
-                  );
-                }}
-                value={datetimeToDate(state.dateDue)}
-                autoClose={true}
-              />
+                <DatePicker
+                  name="dateDue"
+                  dateFormat="YYYY-MM-DD"
+                  className="w-full bg-background border border-border"
+                  onChange={(e) => {
+                    const dateOnly = e.target.value.split("T")[0];
+                    const datetime = dateToDatetime(dateOnly);
+                    dispatch(
+                      actions.editInvoice({
+                        dateDue: datetime,
+                      }),
+                    );
+                  }}
+                  value={datetimeToDate(state.dateDue)}
+                  autoClose={true}
+                />
               </div>
             </div>
           </div>

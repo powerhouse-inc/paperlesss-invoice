@@ -347,3 +347,29 @@ div:has(> .select__search) {
 .base-picker__input button {
   background-color: transparent !important;
 }
+
+/* Field height. This CANNOT go in the DatePicker's `className`: that prop is
+   forwarded to the field wrapper AND the popover AND the calendar (see
+   date-picker.js / base-picker.js), and because `cn` is twMerge, an `h-*`
+   there overrides the popover's own height too -- clamping the popover to the
+   field's height so the day grid spills outside its painted background and
+   renders transparent over the page. `base-picker__input` is on the field
+   wrapper only (the popover carries `base-picker__popover`), so sizing here
+   reaches the field and cannot touch the calendar. Matches the 2rem/h-8 used
+   by the navbar controls and the line-item buttons. */
+.base-picker__input {
+  height: 2rem;
+  min-height: 2rem;
+}
+
+/* Validation messages. FormMessage hard-codes `text-red-900 dark:text-red-900`
+   (and yellow-900/blue-900) -- shade 900 for BOTH themes, so on the dark
+   slate-800 background the text reads as black. The component exposes no class
+   hook, but it does stamp `data-type` on every message; theme through that.
+   Readable in both modes: light keeps the strong shades, dark lightens them. */
+.dark [data-type="error"] {
+  color: var(--color-red-400) !important;
+}
+.dark [data-type="warning"] {
+  color: var(--color-orange-300, var(--color-red-400)) !important;
+}

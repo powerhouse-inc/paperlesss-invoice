@@ -62,7 +62,7 @@ export function TimeTrackingReportButton() {
   }
 
   const buttonClass =
-    "flex items-center gap-2 px-4 py-2 border border-input rounded-md hover:bg-accent transition-colors text-sm font-medium text-foreground disabled:opacity-60";
+    "flex items-center gap-2 h-8 px-3 border border-input rounded-md hover:bg-accent transition-colors text-xs font-medium text-foreground disabled:opacity-60";
 
   return (
     <>

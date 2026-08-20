@@ -278,7 +278,7 @@ export function LineItemsTable({
             <TimeTrackingReportButton />
             <button
               onClick={() => setShowTagTable(true)}
-              className="flex items-center gap-2 px-4 py-2 border border-input rounded-md hover:bg-accent transition-colors text-sm font-medium text-foreground"
+              className="flex items-center gap-2 h-8 px-3 border border-input rounded-md hover:bg-accent transition-colors text-xs font-medium text-foreground"
               title="Manage Tags for All Line Items"
             >
               <Tag className="w-4 h-4" />
@@ -289,7 +289,7 @@ export function LineItemsTable({
                 type="button"
                 disabled={isAddingNew}
                 onClick={handleAddClick}
-                className="inline-flex items-center h-10 px-4 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center h-8 px-3 rounded text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Add Line Item
               </button>

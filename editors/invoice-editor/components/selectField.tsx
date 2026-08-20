@@ -323,15 +323,15 @@ export const SelectField = (props: SelectFieldProps) => {
   return (
     <Select
       key={selectKey}
-      style={{ width: 230 }}
+      style={{ width: 160 }}
       options={optionsToShow()}
       value={status || "DRAFT"}
       onChange={handleChange}
       selectionIcon="checkmark"
       selectionIconPosition="left"
       defaultValue={STATUS_OPTIONS_MAP[0].value} // Draft is the default
-      className="text-foreground border-border"
-      contentClassName="bg-popover border border-border"
+      className="h-8 text-xs text-foreground border-border"
+      contentClassName="w-56 bg-popover border border-border"
     />
   );
 };
