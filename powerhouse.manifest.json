@@ -15,13 +15,6 @@
   "apps": [],
   "editors": [
     {
-      "id": "editor",
-      "name": "editor",
-      "documentTypes": [
-        "powerhouse/invoice"
-      ]
-    },
-    {
       "name": "invoice-editor",
       "id": "invoice-editor",
       "documentTypes": [
@@ -30,6 +23,18 @@
     }
   ],
   "processors": [],
-  "subgraphs": [],
-  "config": []
+  "subgraphs": [
+    {
+      "id": "invoice-addon",
+      "name": "Invoice Addon"
+    }
+  ],
+  "config": [
+    {
+      "name": "CLAUDE_API_KEY",
+      "type": "secret",
+      "description": "Anthropic Claude API key. Used by scripts/invoice/pdfToClaudeAI.ts to extract invoice data from PDF uploads. Obtain from console.anthropic.com.",
+      "required": false
+    }
+  ]
 }

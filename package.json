@@ -1,6 +1,6 @@
 {
   "name": "paperless-invoice",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "license": "AGPL-3.0-only",
   "files": [
     "/dist"
@@ -110,5 +110,13 @@
     "react": "^19",
     "react-dom": "^19",
     "zod": "^4"
+  },
+  "dependencies": {
+    "@react-pdf/renderer": "^4.5.1",
+    "ethers": "^6.17.0",
+    "lucide-react": "^1.23.0",
+    "tailwind-merge": "^3.6.0",
+    "unpdf": "^1.6.2",
+    "world-countries": "^5.1.0"
   }
 }

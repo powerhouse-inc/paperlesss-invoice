@@ -1,0 +1,238 @@
+import { type Dispatch } from "react";
+import { X, Tag } from "lucide-react";
+import { PowerhouseButton as Button } from "@powerhousedao/design-system";
+import {
+  Select,
+  DatePicker,
+  TextInput,
+} from "@powerhousedao/document-engineering/ui";
+import { expenseAccountOptions, paymentAccountOptions } from "./tagMapping.js";
+import { actions, type InvoiceTag } from "document-models/invoice";
+import { focusNextOnEnter } from "../utils/inputHelpers.js";
+
+interface TagAssignmentRow {
+  id: string;
+  item: string;
+  period: string;
+  expenseAccount: string;
+  total: string;
+  lineItemTag: InvoiceTag[];
+}
+
+interface LineItemTagsTableProps {
+  lineItems: TagAssignmentRow[];
+  onClose: () => void;
+  dispatch: Dispatch<any>;
+  paymentAccounts: InvoiceTag[];
+}
+
+export function LineItemTagsTable({
+  lineItems,
+  onClose,
+  dispatch,
+  paymentAccounts,
+}: LineItemTagsTableProps) {
+  const handleReset = () => {
+    // Resetting all tags to empty values
+    lineItems.forEach((item) => {
+      item.lineItemTag.forEach((tag) => {
+        dispatch(
+          actions.setLineItemTag({
+            lineItemId: item.id,
+            dimension: tag.dimension,
+            value: "",
+            label: "",
+          }),
+        );
+      });
+    });
+
+    // Reset the payment account to empty value
+    paymentAccounts.forEach((tag) => {
+      dispatch(
+        actions.setInvoiceTag({
+          dimension: tag.dimension,
+          value: "",
+          label: "",
+        }),
+      );
+    });
+  };
+
+  // Get the last payment account value from the paymentAccounts to display in the payment account select
+  const selectedPaymentAccountValue =
+    paymentAccounts && paymentAccounts.length > 0
+      ? (paymentAccounts[paymentAccounts.length - 1].value ?? "")
+      : "";
+
+  return (
+    <div className="w-full">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border p-6 z-10">
+        <span className="flex items-center gap-2">
+          <h2 className="text-2xl font-semibold text-foreground">
+            Assign Tags{" "}
+          </h2>
+          <Tag style={{ width: 28, height: 28, fill: "var(--foreground)" }} />
+        </span>
+        <div className="flex items-center gap-2">
+          <Button color="light" size="medium" onClick={handleReset}>
+            Reset{" "}
+          </Button>
+          <button
+            onClick={onClose}
+            className="rounded-full p-2 hover:bg-accent text-foreground"
+          >
+            <X size={24} className="text-muted-foreground" />
+          </button>
+        </div>
+      </div>
+
+      {/* Table View */}
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-full border-collapse bg-background">
+          <thead className="bg-muted z-10">
+            <tr>
+              <th className="border-b border-border p-3 text-left text-foreground">
+                Item
+              </th>
+              <th className="border-b border-border p-3 text-left text-foreground">
+                Period
+              </th>
+              <th className="border-b border-border p-3 text-left text-foreground">
+                Xero Expense Account
+              </th>
+              <th className="border-b border-border p-3 text-right text-foreground">
+                Total
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {lineItems.map((item) => (
+              <tr key={item.id} className="hover:bg-muted">
+                <td className="border-b border-border p-3">
+                  <TextInput
+                    value={item.item}
+                    onChange={() => {}}
+                    onBlur={(e) => {
+                      dispatch(
+                        actions.editLineItem({
+                          id: item.id,
+                          description: e.target.value,
+                        }),
+                      );
+                    }}
+                    onKeyDown={focusNextOnEnter}
+                    className="border-border"
+                  />
+                </td>
+                <td className="border-b border-border w-48">
+                  <DatePicker
+                    key={item.lineItemTag.find((tag) => tag.dimension === "accounting-period")?.label || 'no-date'}
+                    name="period"
+                    dateFormat="YYYY-MM-DD"
+                    autoClose={true}
+                    placeholder="Select Period"
+                    className="w-full bg-background border border-border"
+                    value={
+                      item.lineItemTag.find(
+                        (tag) => tag.dimension === "accounting-period",
+                      )?.label || ""
+                    }
+                    onChange={(e) =>
+                      dispatch(
+                        actions.setLineItemTag({
+                          lineItemId: item.id,
+                          dimension: "accounting-period",
+                          value: new Date(e.target.value)
+                            .toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "numeric",
+                            })
+                            .split("/")
+                            .reverse()
+                            .join("/"),
+                          label: new Date(e.target.value).toLocaleDateString(
+                            "en-US",
+                            {
+                              year: "numeric",
+                              month: "long",
+                            },
+                          ),
+                        }),
+                      )
+                    }
+                  />
+                </td>
+                <td className="border-b border-border p-3">
+                  <Select
+                    className="text-foreground border-border"
+                    options={expenseAccountOptions}
+                    value={
+                      item.lineItemTag.find(
+                        (tag) => tag.dimension === "xero-expense-account",
+                      )?.value || ""
+                    }
+                    placeholder="Select Expense Account"
+                    searchable={true}
+                    contentClassName="bg-popover border border-border"
+                    onChange={(value) => {
+                      dispatch(
+                        actions.setLineItemTag({
+                          lineItemId: item.id,
+                          dimension: "xero-expense-account",
+                          value: value as string,
+                          label: expenseAccountOptions.find(
+                            (option) => option.value === value,
+                          )?.label,
+                        }),
+                      );
+                    }}
+                  />
+                </td>
+                <td className="border-b border-border p-3 text-right font-medium text-foreground">
+                  {item.total}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Payment Account */}
+      <div className="border-t border-border p-6">
+        <div className="flex items-center justify-end gap-4">
+          <label className="text-lg font-medium text-foreground">
+            Payment Account
+          </label>
+          <Select
+            className="text-foreground border-border"
+            options={paymentAccountOptions}
+            value={
+              paymentAccountOptions.find(
+                (option) => option.value === selectedPaymentAccountValue,
+              )?.value ?? ""
+            }
+            placeholder="Select Payment Account"
+            searchable={true}
+            contentClassName="bg-popover border border-border"
+            onChange={(value) => {
+              const selectedLabel =
+                paymentAccountOptions.find((option) => option.value === value)
+                  ?.label || "";
+              const cleanLabel = selectedLabel.replace(/\s+\w+$/, "").trim();
+              dispatch(
+                actions.setInvoiceTag({
+                  dimension: "xero-payment-account",
+                  value: value as string,
+                  label: cleanLabel,
+                }),
+              );
+            }}
+            style={{ width: "230px" }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

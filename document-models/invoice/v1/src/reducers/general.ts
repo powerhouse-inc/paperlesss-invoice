@@ -1,24 +1,101 @@
 import type { InvoiceGeneralOperations } from "document-models/invoice/v1";
+import { InvoiceNotEditableError } from "../../gen/general/error.js";
+
+/**
+ * Converts a date string to ISO datetime format if it's not already in that format
+ * Handles both date-only (YYYY-MM-DD) and datetime (YYYY-MM-DDTHH:mm:ss.sssZ) strings
+ */
+function ensureDatetimeFormat(
+  dateStr: string | null | undefined,
+): string | null {
+  if (!dateStr || dateStr.trim() === "") return null;
+  // If it's already a datetime string, return as is
+  if (dateStr.includes("T")) return dateStr;
+  // Convert date-only to datetime at midnight UTC
+  return `${dateStr}T00:00:00.000Z`;
+}
+
+/**
+ * Statuses in which invoice *content* may still be edited. Workflow operations
+ * (status transitions, payments, accounting tags) are deliberately not gated —
+ * they are how an issued invoice progresses.
+ */
+const EDITABLE_STATUSES: string[] = ["DRAFT", "REJECTED"];
 
 export const invoiceGeneralOperations: InvoiceGeneralOperations = {
   editInvoiceOperation(state, action) {
-    // TODO: implement editInvoiceOperation reducer
-    throw new Error("Reducer for 'editInvoiceOperation' not implemented.");
-  },
-  addPaymentOperation(state, action) {
-    // TODO: implement addPaymentOperation reducer
-    throw new Error("Reducer for 'addPaymentOperation' not implemented.");
-  },
-  editPaymentDataOperation(state, action) {
-    // TODO: implement editPaymentDataOperation reducer
-    throw new Error("Reducer for 'editPaymentDataOperation' not implemented.");
+    if (!EDITABLE_STATUSES.includes(state.status)) {
+      throw new InvoiceNotEditableError(
+        `Cannot edit invoice details while the invoice is ${state.status}; only DRAFT and REJECTED invoices may be edited`,
+      );
+    }
+    const newState = { ...state };
+
+    newState.currency = action.input.currency ?? state.currency;
+    // Convert date strings to datetime format to match Zod schema requirements
+    newState.dateDue =
+      action.input.dateDue !== undefined
+        ? ensureDatetimeFormat(action.input.dateDue)
+        : state.dateDue;
+    newState.dateIssued =
+      action.input.dateIssued !== undefined
+        ? ensureDatetimeFormat(action.input.dateIssued)
+        : state.dateIssued;
+    newState.dateDelivered =
+      action.input.dateDelivered !== undefined
+        ? ensureDatetimeFormat(action.input.dateDelivered)
+        : state.dateDelivered;
+    newState.invoiceNo = action.input.invoiceNo ?? state.invoiceNo;
+    newState.notes = action.input.notes ?? state.notes;
+
+    Object.assign(state, newState);
   },
   editStatusOperation(state, action) {
-    // TODO: implement editStatusOperation reducer
-    throw new Error("Reducer for 'editStatusOperation' not implemented.");
+    if (
+      state.status === "DRAFT" &&
+      action.input.status !== "DRAFT" &&
+      action.input.status !== "CANCELLED"
+    ) {
+      const wallet = state.issuer?.paymentRouting?.wallet;
+      if (!wallet?.address || (!wallet.chainName && !wallet.chainId)) {
+        throw new Error(
+          "Issuer wallet address and chain must be set before moving out of DRAFT",
+        );
+      }
+    }
+    state.status = action.input.status;
+  },
+  editPaymentDataOperation(state, action) {
+    const payment = state.payments.find(
+      (payment) => payment.id === action.input.id,
+    );
+    if (payment) {
+      payment.processorRef = action.input.processorRef ?? payment.processorRef;
+      payment.paymentDate = action.input.paymentDate ?? payment.paymentDate;
+      payment.txnRef = action.input.txnRef ?? payment.txnRef;
+      // `confirmed` is `Boolean!` in EditPaymentDataInput — always supplied.
+      payment.confirmed = action.input.confirmed;
+      payment.issue = action.input.issue ?? payment.issue;
+    }
+  },
+  addPaymentOperation(state, action) {
+    const payment = {
+      id: action.input.id,
+      processorRef: action.input.processorRef ?? "",
+      paymentDate: ensureDatetimeFormat(action.input.paymentDate) ?? null,
+      txnRef: action.input.txnRef ?? "",
+      // `confirmed` is `Boolean!` in AddPaymentInput — always supplied.
+      confirmed: action.input.confirmed,
+      issue: action.input.issue ?? "",
+      amount: 0,
+    };
+    state.payments.push(payment);
   },
   setExportedDataOperation(state, action) {
-    // TODO: implement setExportedDataOperation reducer
-    throw new Error("Reducer for 'setExportedDataOperation' not implemented.");
+    const exportedData = {
+      timestamp: action.input.timestamp,
+      exportedLineItems: action.input.exportedLineItems,
+    };
+    state.exported = exportedData;
   },
 };

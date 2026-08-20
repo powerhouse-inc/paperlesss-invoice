@@ -13,3 +13,323 @@
 
   /* --*: initial; */
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Editor form controls (document-engineering TextInput / Textarea / FormLabel)
+   ──────────────────────────────────────────────────────────────────────────
+   Editor fields use document-engineering's standalone controls directly (no
+   wrapper applying `text-foreground`). Those controls ship `text-gray-900
+   dark:text-gray-50` (inputs, via the shared Input base class that also carries
+   `dark:bg-charcoal-900`) and `text-gray-900 dark:text-gray-50` (FormLabel), and
+   their dark: variants never get generated here — so values, placeholders and
+   labels render dark-on-dark in dark mode. Theme them ONCE via the components'
+   own stable class hooks (works everywhere, including modal portals; token flips
+   with the theme, so it reads correctly in both light and dark). */
+[class*="dark:bg-charcoal-900"] {
+  color: var(--foreground);
+  /* These inputs draw their focus ring with a WHITE offset halo
+     (`focus-visible:ring-offset-white`), which renders as a stray light line/edge
+     against the editor surface (visible only while the window is focused, like
+     any focus ring). Drop the white offset and theme the ring so focus is still
+     indicated, without the halo. */
+  --tw-ring-offset-color: transparent;
+  --tw-ring-color: var(--ring, var(--border));
+}
+[class*="dark:bg-charcoal-900"]::placeholder {
+  color: var(--muted-foreground);
+}
+label[class*="inline-flex items-center text-sm font-medium"] {
+  color: var(--foreground);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   document-engineering Select (e.g. the currency dropdown)
+   ──────────────────────────────────────────────────────────────────────────
+   The trigger's hover (`hover:bg-gray-100` / `hover:border-gray-300`) and the
+   dropdown option rows (labels `text-gray-700 dark:text-gray-500`, cmdk
+   highlight `data-[selected]:bg-gray-100`, and a `bg-gray-900` selection box)
+   all use light palette classes or ungenerated dark variants → a white hover,
+   dark-on-dark option text and black selection boxes in dark mode. Theme them
+   with tokens (correct in both light and dark). The panel surface itself is
+   themed by the editor's `contentClassName="bg-popover border border-border"`. */
+
+/* Trigger hover. Only the Select trigger carries BOTH `dark:bg-charcoal-900`
+   and `hover:bg-gray-100`, so this matches it without touching text inputs. */
+[class*="dark:bg-charcoal-900"][class*="hover:bg-gray-100"]:hover {
+  background-color: color-mix(in oklab, var(--foreground) 8%, transparent) !important;
+  border-color: var(--border) !important;
+}
+
+/* Option rows: readable label text (was dark-on-dark) */
+.select__list-item,
+.select__list-item [class*="text-gray-700"],
+.select__list-item [class*="text-gray-500"] {
+  color: var(--foreground) !important;
+}
+/* Each row ships `border-y-2 border-white dark:border-slate-600` — separators
+   designed to be invisible against the original WHITE panel. On the dark popover
+   the dark variant never generates, so they stripe the list with visible bands
+   between options. Make them transparent so the row shows the panel surface
+   through and the list reads as one uniform block. */
+.select__list-item {
+  border-color: transparent !important;
+}
+/* Highlighted / hovered option (cmdk `data-selected`) → subtle overlay instead
+   of the white/near-black block */
+.select__list-item[data-selected="true"],
+.select__list-item[aria-selected="true"],
+.select__list-item:hover {
+  background-color: color-mix(in oklab, var(--foreground) 12%, transparent) !important;
+}
+/* Selection indicator box: filled state (bg-gray-900 → black) becomes primary;
+   the empty box's border follows the border token */
+.select__list-item [class*="bg-gray-900"] {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+.select__list-item [class*="border-gray-700"],
+.select__list-item [class*="border-gray-800"] {
+  border-color: var(--border) !important;
+}
+
+/* Dropdown height. The base cmdk CommandList caps at `max-h-[300px]` — an
+   arbitrary class that only lives in node_modules and never gets generated here,
+   so the list is uncapped and a long list (all countries) fills the screen and
+   buries the search field. Cap it so the list scrolls and the search stays
+   pinned above it. */
+.select__list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Search field (CommandInput). The input ships `text-gray-900 dark:text-gray-50`
+   and its wrapper `hover:bg-gray-100` / `focus-within:bg-*` (dark variants never
+   generated) → dark-on-dark text and a white flash while typing. Theme the input
+   text/placeholder and neutralise the wrapper's white hover/focus fill. */
+.select__search {
+  color: var(--foreground) !important;
+  background-color: transparent !important;
+}
+.select__search::placeholder {
+  color: var(--muted-foreground) !important;
+}
+div:has(> .select__search) {
+  background-color: transparent !important;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   document-engineering DatePicker calendar — today / selection / hover / nav
+   ──────────────────────────────────────────────────────────────────────────
+   The DatePicker (@powerhousedao/document-engineering) decorates the calendar's
+   today marker, selected day and hover state with Tailwind arbitrary-variant
+   utility classes ([&_.date-picker__today]:border-…, data-[selected]:bg-blue-500,
+   hover:bg-gray-100, …). Those classes are compiled ONLY into document-
+   engineering's own dist/style.css — which this app never imports and Connect's
+   prebuilt CSS doesn't include — and Tailwind v4 never scans node_modules, so
+   they are never generated in this build. Result: no today ring, no selection
+   fill and no hover feedback on the calendar.
+
+   Fix the same way the design-system migration themes other dependency markup:
+   restyle the calendar's stable class / data-attribute hooks with plain CSS
+   (guaranteed to load) using semantic tokens, so it adapts to both the default
+   light theme and dark. `!important` guarantees these win even if document-
+   engineering's own utilities ever do get loaded. */
+
+/* Selected day → primary pill (the cell carries `.date-picker__selected`; its
+   button also gets `aria-selected="true"`). */
+.date-picker__calendar .date-picker__selected > button,
+.date-picker__calendar .date-picker__day-button[aria-selected="true"] {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+/* Today (when not also the selected day) → RING ONLY. The library fills the
+   today cell with `bg-gray-100` (its `dark:bg-gray-900` variant never gets
+   generated here), which in dark mode becomes a light-grey disc that hides the
+   date number. Strip that fill on both the cell and its button, keep just the
+   ring, and pin the number to --foreground so it stays readable. */
+.date-picker__calendar .date-picker__today:not(.date-picker__selected),
+.date-picker__calendar .date-picker__today:not(.date-picker__selected) > button {
+  background-color: transparent !important;
+}
+.date-picker__calendar .date-picker__today:not(.date-picker__selected) > button {
+  border: 2px solid var(--primary) !important;
+  border-radius: 9999px !important;
+  color: var(--foreground) !important;
+  font-weight: 500;
+}
+
+/* Hover / focus feedback on selectable day buttons (scoped to day buttons so it
+   never touches the nav arrows or caption label). Uses a --foreground overlay
+   rather than --accent: in dark mode --accent sits almost on top of the calendar
+   surface and the hover is invisible, whereas a foreground tint reads clearly in
+   BOTH themes (light wash on the dark surface, dark wash on the light surface).
+   Bump the 18% up for a stronger highlight or down for a subtler one. */
+.date-picker__calendar
+  .date-picker__day-button:hover:not([disabled]):not([aria-selected="true"]) {
+  background-color: color-mix(in oklab, var(--foreground) 18%, transparent) !important;
+  color: var(--foreground) !important;
+}
+
+/* Nav arrows (‹ ›): the ‹NavCalendar› buttons are position:absolute with NO
+   z-index, so the caption label (also positioned, painted later) sits over them
+   and swallows the clicks — the arrows look fine but are dead in every view.
+   Lift ONLY the buttons; do NOT set position:relative on the nav (that
+   re-anchors the arrows and misplaces them). */
+.date-picker__calendar nav button,
+.date-picker__calendar .date-picker__button-previous,
+.date-picker__calendar .date-picker__button-next {
+  z-index: 50;
+}
+
+/* Nav arrow icons (‹ ›) ship `dark:text-gray-300` (never generated) and fall
+   back to black in dark mode. Color ONLY the arrow glyphs with --foreground so
+   they read in both themes; the buttons' border/background are left alone. */
+.date-picker__calendar nav button svg,
+.date-picker__calendar .date-picker__button-previous svg,
+.date-picker__calendar .date-picker__button-next svg {
+  color: var(--foreground);
+}
+
+/* Calendar popover padding. The DatePicker overrides the calendar's default
+   `p-3` with `p-0` and moves the intended padding onto the popover via arbitrary
+   `[&.base-picker__popover]:px-4 / pt-3 / pb-6` utilities — none of which are
+   generated here, so the day grid and the absolute-positioned nav arrows sit
+   flush against the popover border (claustrophobic). Restore breathing room on
+   the popover; the arrows inset with the caption since they're positioned
+   inside it. */
+.base-picker__popover {
+  padding: 14px 16px !important;
+}
+
+/* Kill the nested "double border". The editor passes `border border-border
+   bg-background` as the DatePicker className, which the component leaks onto BOTH
+   the popover AND the inner calendar element — so once the popover gained
+   padding, the calendar's own border appeared as a second box inside it. Strip
+   the calendar's border/background so ONLY the popover frames the calendar (the
+   calendar then sits transparently on the popover's surface). */
+.date-picker__calendar {
+  border: none !important;
+  background-color: transparent !important;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Month / year picker views — spacing
+   ──────────────────────────────────────────────────────────────────────────
+   The month/year switcher grids and the Year/Month footer size themselves with
+   arbitrary-value utilities (grid gap-x-[14px] gap-y-[15px], footer w-[114px],
+   cell w-[68px]/py-[5px], …). Like the calendar decoration above, those classes
+   exist only in document-engineering's dist CSS and are never generated in this
+   build — so the months/years collapse together with no gap and the Year/Month
+   footer hugs the calendar border. Restore comfortable, tunable spacing. */
+
+/* 3-column month & year grids: gap between cells + keep them off the edges */
+.date-picker__month-grid--view > div:first-child,
+.date-picker__year-grid--view > div:first-child {
+  column-gap: 16px;
+  row-gap: 14px;
+  padding-inline: 6px;
+}
+
+/* Month / year cells: a little internal padding so labels aren't cramped, and
+   readable text (they ship a flat `text-gray-900` with no dark variant). */
+.date-picker__month-grid--view > div:first-child button,
+.date-picker__year-grid--view > div:first-child button {
+  padding-block: 6px;
+  color: var(--foreground);
+}
+
+/* Year / month button STATES. The library paints these with light utilities
+   (hover:bg-gray-100, current year bg-gray-100, selected bg-gray-900) that are
+   generated — so in dark mode the white/near-black blocks sit under the white
+   label and make it unreadable. Re-theme each state with tokens. */
+
+/* Hover → readable foreground overlay (matches the day hover) */
+.date-picker__month-grid--view > div:first-child button:hover,
+.date-picker__year-grid--view > div:first-child button:hover {
+  background-color: color-mix(in oklab, var(--foreground) 18%, transparent) !important;
+  color: var(--foreground) !important;
+}
+/* Current year marker (bg-gray-100 + text-accent-foreground) → subtle primary
+   tint instead of the white block, label stays --foreground */
+.date-picker__year-grid--view > div:first-child button[class*="text-accent-foreground"] {
+  background-color: color-mix(in oklab, var(--primary) 22%, transparent) !important;
+  color: var(--foreground) !important;
+}
+/* Selected year / active month (bg-gray-900 text-white) → solid primary pill,
+   matching the day-view selection */
+.date-picker__year-grid--view > div:first-child button[class*="bg-gray-900"],
+.date-picker__month-grid--view > div:first-child button[class*="bg-gray-900"] {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+/* Year / Month footer toggle: lift it off the calendar's bottom + side borders
+   and give the two buttons real padding. */
+.date-picker__date-footer {
+  gap: 16px;
+  padding: 8px 6px 4px;
+  margin-top: 4px;
+}
+.date-picker__date-footer button {
+  padding: 8px 16px;
+  color: var(--foreground);
+  background-color: transparent !important; /* was bg-white → white block in dark */
+  border-color: var(--border) !important;
+}
+.date-picker__date-footer button:hover {
+  background-color: color-mix(in oklab, var(--foreground) 18%, transparent) !important;
+}
+/* Active toggle (the library adds bg-gray-100) → subtle primary tint */
+.date-picker__date-footer button[class*="bg-gray-100"] {
+  background-color: color-mix(in oklab, var(--primary) 22%, transparent) !important;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   DatePicker text & icon colors (theme-aware)
+   ──────────────────────────────────────────────────────────────────────────
+   The DatePicker sets its readable colors via dark: variant classes
+   (dark:text-gray-50 on day numbers, dark:text-gray-50 on the trigger icon,
+   dark:text-gray-300 on the nav, …) that — like everything above — exist only
+   in document-engineering's dist CSS and are never generated in this build. So
+   in dark mode they fall back to the light `text-gray-{700,900}` and render
+   dark-on-dark: unreadable day numbers, a black calendar icon and a dark typed
+   date. Pin semantic tokens instead — they flip with the theme, so this reads
+   correctly in BOTH light and dark. */
+
+/* Calendar day numbers */
+.date-picker__calendar .date-picker__day-button {
+  color: var(--foreground);
+}
+/* Outside-month and disabled days stay de-emphasised */
+.date-picker__calendar .date-picker__outside > button,
+.date-picker__calendar .date-picker__disabled > button {
+  color: var(--muted-foreground);
+}
+
+/* Input field: the typed date value (ships no explicit color, inherits dark) */
+.base-picker__input .input-field,
+.base-picker__input input {
+  color: var(--foreground);
+}
+/* Input field: the calendar trigger icon (ships text-gray-700 dark:text-gray-50,
+   the dark variant of which never gets generated → black icon in dark mode) */
+.base-picker__input svg {
+  color: var(--muted-foreground);
+}
+
+/* The DatePicker field is split into a trigger/icon segment and a text-input
+   segment that render on DIFFERENT backgrounds (the inner Input keeps its own
+   bg-white/charcoal while the trigger button sits transparently on the wrapper),
+   so the icon side reads darker than the input. Unify the whole field to one
+   surface: give the wrapper the input background and make both inner segments
+   transparent, so icon and input share the same background. Applies to every
+   DatePicker. */
+.base-picker__input {
+  background-color: var(--background) !important;
+}
+.base-picker__input input,
+.base-picker__input .input-field,
+.base-picker__input button {
+  background-color: transparent !important;
+}
