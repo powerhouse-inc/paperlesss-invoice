@@ -1,10 +1,10 @@
 {
-  "name": "paperless-invoice",
-  "description": "",
-  "category": "",
+  "name": "@powerhousedao/paperless-invoice",
+  "description": "Paperless Invoice Editor",
+  "category": "finance",
   "publisher": {
-    "name": "",
-    "url": ""
+    "name": "Powerhouse",
+    "url": "https://powerhousedao.inc"
   },
   "documentModels": [
     {
