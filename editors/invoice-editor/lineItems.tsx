@@ -273,7 +273,9 @@ export function LineItemsTable({
       <div className="mt-4">
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
-          <h4 className="text-xl font-semibold text-foreground">Line Items</h4>
+          <h4 className="text-base font-semibold text-foreground">
+            Line Items
+          </h4>
           <div className="flex items-center gap-3">
             <TimeTrackingReportButton />
             <button
@@ -310,7 +312,7 @@ export function LineItemsTable({
           >
             <table
               ref={tableRef}
-              className="w-full table-fixed border-collapse bg-card text-foreground"
+              className="w-full table-fixed border-collapse bg-card text-sm text-foreground"
             >
               <colgroup>
                 <col style={{ width: "30%" }} />
