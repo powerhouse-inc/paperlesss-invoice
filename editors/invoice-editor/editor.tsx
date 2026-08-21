@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   type InvoiceAction,
   type InvoiceDocument,
@@ -22,6 +22,9 @@ import { focusNextOnEnter, toInputWarnings } from "./utils/inputHelpers.js";
 import { canEditInvoice } from "./utils/invoicePermissions.js";
 import { ReadOnlyRegion } from "./components/readOnlyRegion.js";
 import { PartySummaryCard } from "./components/partySummaryCard.js";
+import { LineItemsCompact } from "./components/lineItemsCompact.js";
+import { PdfPane } from "./components/pdfPane.js";
+import { SplitPane } from "./components/splitPane.js";
 import { PartyFormModal } from "./components/partyFormModal.js";
 import ConfirmationModal from "./components/confirmationModal.js";
 import {
@@ -56,6 +59,12 @@ import { useSyncedField } from "./hooks/useSyncedField.js";
 import { useInvoiceActions } from "./hooks/useInvoiceActions.js";
 import { useAttachmentViewer } from "./hooks/useAttachmentViewer.js";
 import type { ValidationResult } from "./validation/validationManager.js";
+
+// Below this viewport width the compare view's two panes are each too narrow
+// to read, so the uploaded PDF opens in the modal instead. Declared after all
+// imports on purpose: interleaved with them, bundlers hoist the imports and
+// this binding can still be in its temporal dead zone on first render.
+const SPLIT_MIN_WIDTH = 1000;
 
 // All shared utils (formatNumber, isFiatCurrency, dateToDatetime, datetimeToDate, etc.)
 // are now imported from ./utils/utils.js (Phase 1 consolidation)
@@ -95,12 +104,59 @@ export default function Editor() {
   // summary of both parties rather than two full-height forms.
   const [openParty, setOpenParty] = useState<"issuer" | "payer" | null>(null);
 
+  // Side-by-side compare view. Below SPLIT_MIN_WIDTH the two panes are each too
+  // narrow to be worth reading, so "View Uploaded Invoice" keeps its original
+  // modal behaviour instead.
+  const [isSplitOpen, setIsSplitOpen] = useState(false);
+  const [isWideEnough, setIsWideEnough] = useState(
+    () => typeof window === "undefined" || window.innerWidth >= SPLIT_MIN_WIDTH,
+  );
+
+  useEffect(() => {
+    const onResize = () =>
+      setIsWideEnough(window.innerWidth >= SPLIT_MIN_WIDTH);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Shrinking the window while split is open drops back to the modal rather
+  // than leaving two unusable slivers. The object URL is untouched, so the
+  // modal picks up the same PDF.
+  useEffect(() => {
+    if (!isWideEnough) setIsSplitOpen(false);
+  }, [isWideEnough]);
+
   // PDF review + export logic extracted to hook (following vercel-react-best-practices:
   // extract complex side-effecty logic, isolate transient review state)
   const pdf = usePdfReview(fiatMode, state, toast, dispatch);
 
   // Reusable attachment reader for previewing the stored base invoice PDF.
   const viewer = useAttachmentViewer();
+
+  /**
+   * "View Uploaded Invoice" is a toggle, not a one-way open.
+   *
+   * Wide viewports get the side-by-side compare view; narrow ones fall back to
+   * the original modal. Closing releases the object URL via `viewer.close()`
+   * so we are not holding blob bytes for a pane nobody is looking at.
+   */
+  const handleViewUpload = useCallback(() => {
+    if (!baseInvoiceRef) return;
+
+    if (isSplitOpen) {
+      setIsSplitOpen(false);
+      viewer.close();
+      return;
+    }
+
+    if (isWideEnough) setIsSplitOpen(true);
+    void viewer.view(baseInvoiceRef);
+  }, [baseInvoiceRef, isSplitOpen, isWideEnough, viewer]);
+
+  const closeSplit = useCallback(() => {
+    setIsSplitOpen(false);
+    viewer.close();
+  }, [viewer]);
   useEffect(() => {
     if (viewer.error) {
       toast?.("Couldn't load the uploaded invoice PDF.", { type: "error" });
@@ -381,231 +437,12 @@ export default function Editor() {
     reportPaymentIssue: "Confirm",
   };
 
-  return (
-    <div className="w-full min-h-full flex flex-col invoice-editor">
-      <DocumentToolbar />
-      {/* Top navbar. Full-bleed so its bottom border reaches both editor
-          edges, with the controls held to the same max-w-7xl column as the
-          content below. Groups match the two clusters already in use: identity
-          and file actions left, currency and status right. */}
-      <div className="w-full border-b border-border">
-        <div className="mx-auto w-full max-w-7xl px-4 py-3">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            {/* Left side with Invoice title, input, and upload */}
-            <div className="flex flex-wrap items-start gap-4">
-              <h1 className="flex h-8 items-center text-md font-bold whitespace-nowrap text-foreground">
-                Invoice
-              </h1>
-              <ReadOnlyRegion editable={canEdit} className="min-w-[200px]">
-                <TextInput
-                  className="h-8 text-xs border-border"
-                  placeholder={"Add invoice number"}
-                  value={invoiceNoField.value}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    invoiceNoField.setValue(val);
-                    // Clear previous error if now has a value (so stale warning disappears from input)
-                    // Do NOT dispatch here — dispatch only onBlur per project rules (see CLAUDE.md)
-                    if (
-                      val &&
-                      val.trim() !== "" &&
-                      validations.invoice &&
-                      !validations.invoice.isValid
-                    ) {
-                      setField("invoice", {
-                        isValid: true,
-                        message: "",
-                        severity: "none",
-                      });
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const val = e.target.value;
-                    if (state?.invoiceNo !== val) {
-                      dispatch(actions.editInvoice({ invoiceNo: val }));
-                    }
-                  }}
-                  warnings={toInputWarnings(validations.invoice)}
-                  onKeyDown={focusNextOnEnter}
-                />
-              </ReadOnlyRegion>
-
-              {/* Upload File  ↔  View Uploaded Invoice (once a base invoice is attached) */}
-              {baseInvoiceRef ? (
-                <button
-                  onClick={() => void viewer.view(baseInvoiceRef)}
-                  disabled={viewer.isLoading}
-                  className="inline-flex items-center h-8 px-3 rounded text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors whitespace-nowrap cursor-pointer disabled:opacity-60"
-                >
-                  {viewer.isLoading ? "Loading…" : "View Uploaded Invoice"}
-                  <svg
-                    className="w-4 h-4 ml-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    ></path>
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                    ></path>
-                  </svg>
-                </button>
-              ) : canEdit ? (
-                <div className="relative" ref={uploadDropdown.ref}>
-                  <button
-                    onClick={uploadDropdown.toggle}
-                    className="inline-flex items-center h-8 px-3 rounded text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors whitespace-nowrap cursor-pointer"
-                    disabled={pdf.isPdfLoading}
-                  >
-                    {pdf.isPdfLoading ? "Processing..." : "Upload File"}
-                    <svg
-                      className="w-4 h-4 ml-2"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M19 9l-7 7-7-7"
-                      ></path>
-                    </svg>
-                  </button>
-
-                  {uploadDropdown.isOpen && !pdf.isPdfLoading && (
-                    <div className="absolute z-10 mt-1 w-48 rounded-md shadow-lg bg-popover text-popover-foreground border border-border">
-                      <div
-                        className="py-1"
-                        role="menu"
-                        aria-orientation="vertical"
-                      >
-                        <label className="block px-4 py-2 text-sm text-foreground hover:bg-accent cursor-pointer">
-                          Upload UBL
-                          <input
-                            accept=".xml"
-                            className="hidden"
-                            onChange={(e) => {
-                              handleFileUpload(e);
-                              uploadDropdown.close();
-                            }}
-                            type="file"
-                          />
-                        </label>
-                        <PDFUploader
-                          changeDropdownOpen={(open) => {
-                            if (!open) uploadDropdown.close();
-                            else uploadDropdown.toggle();
-                          }}
-                          onUploadComplete={pdf.handlePdfUploadComplete}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : null}
-
-              {/* Export Dropdown Button */}
-              <div className="relative" ref={exportDropdown.ref}>
-                <button
-                  onClick={exportDropdown.toggle}
-                  className="inline-flex items-center h-8 px-3 rounded text-xs border border-input bg-background text-foreground hover:bg-accent font-medium transition-colors whitespace-nowrap cursor-pointer"
-                >
-                  Export File
-                  <svg
-                    className="w-4 h-4 ml-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M19 9l-7 7-7-7"
-                    ></path>
-                  </svg>
-                </button>
-
-                {exportDropdown.isOpen && (
-                  <div className="absolute z-10 mt-1 w-48 rounded-md shadow-lg bg-popover text-popover-foreground border border-border">
-                    <div
-                      className="py-1"
-                      role="menu"
-                      aria-orientation="vertical"
-                    >
-                      <button
-                        onClick={() => {
-                          handleExportUBL();
-                          exportDropdown.close();
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-accent cursor-pointer"
-                      >
-                        Export UBL
-                      </button>
-                      <button
-                        onClick={() => {
-                          pdf.handleExportPDF();
-                          exportDropdown.close();
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-accent cursor-pointer"
-                      >
-                        Export PDF
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Currency selector and Status */}
-            <div className="flex flex-row items-start gap-4">
-              <ReadOnlyRegion editable={canEdit}>
-                <div className="w-full">
-                  <Select
-                    options={currencyList.map((c) => ({
-                      label: c.ticker,
-                      value: c.ticker,
-                    }))}
-                    value={state.currency}
-                    placeholder="Currency"
-                    searchable
-                    onChange={(value) =>
-                      handleCurrencyChange(
-                        (Array.isArray(value) ? value[0] : value) || "",
-                      )
-                    }
-                    warnings={toInputWarnings(validations.currency)}
-                    className="h-8 text-xs text-foreground border-border"
-                    contentClassName="w-48 bg-popover border border-border"
-                  />
-                </div>
-              </ReadOnlyRegion>
-
-              {/* Status stays editable in every status — it is the workflow
-                  control that unlocks or locks everything else. */}
-              <SelectField
-                options={STATUS_OPTIONS}
-                value={state.status}
-                onChange={(value) => handleStatusChange(value as Status)}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 max-w-7xl mx-auto w-full mt-6 px-4 pb-8">
+  // Rendered either full-width or as the left half of the compare view, so
+  // it is held as a value rather than inlined twice. The section grids are
+  // already `auto-fit`, so they collapse to one column in the narrow pane
+  // without extra breakpoints.
+  const invoiceBody = (
+    <>
         {/* Invoice dates. These are invoice-level fields, not party details,
             so they stay on the page rather than moving into the party modals. */}
         <ReadOnlyRegion editable={canEdit}>
@@ -713,25 +550,38 @@ export default function Editor() {
           />
         </div>
 
-        {/* Line Items Table */}
-        <div className="mb-8">
-          <LineItemsTable
+        {/* Line items. The eight-column table only fits a half-width pane by
+            scrolling sideways, so the compare view gets dense rows instead —
+            description and total, with everything else behind Edit. */}
+        {isSplitOpen ? (
+          <LineItemsCompact
+            lineItems={state.lineItems}
             currency={state.currency}
-            lineItems={state.lineItems.map((item: InvoiceLineItem) => ({
-              ...item,
-              lineItemTag: item.lineItemTag ?? [],
-            }))}
+            editable={canEdit}
             onAddItem={(item) => dispatch(actions.addLineItem(item))}
-            onDeleteItem={(input) => dispatch(actions.deleteLineItem(input))}
-            onUpdateCurrency={(input) => {
-              dispatch(actions.editInvoice(input));
-            }}
             onUpdateItem={(item) => dispatch(actions.editLineItem(item))}
-            onEditingItemChange={onEditingItemChange}
-            dispatch={dispatch}
-            paymentAccounts={state.invoiceTags ?? []}
+            onDeleteItem={(input) => dispatch(actions.deleteLineItem(input))}
           />
-        </div>
+        ) : (
+          <div className="mb-8">
+            <LineItemsTable
+              currency={state.currency}
+              lineItems={state.lineItems.map((item: InvoiceLineItem) => ({
+                ...item,
+                lineItemTag: item.lineItemTag ?? [],
+              }))}
+              onAddItem={(item) => dispatch(actions.addLineItem(item))}
+              onDeleteItem={(input) => dispatch(actions.deleteLineItem(input))}
+              onUpdateCurrency={(input) => {
+                dispatch(actions.editInvoice(input));
+              }}
+              onUpdateItem={(item) => dispatch(actions.editLineItem(item))}
+              onEditingItemChange={onEditingItemChange}
+              dispatch={dispatch}
+              paymentAccounts={state.invoiceTags ?? []}
+            />
+          </div>
+        )}
 
         {/* Totals Section */}
         <div
@@ -793,7 +643,265 @@ export default function Editor() {
             {modalContentMap[activeModal]}
           </ConfirmationModal>
         )}
+    </>
+  );
+
+  return (
+    <div className="w-full min-h-full flex flex-col invoice-editor">
+      <DocumentToolbar />
+      {/* Top navbar. Full-bleed so its bottom border reaches both editor
+          edges, with the controls held to the same max-w-7xl column as the
+          content below. Two clusters: identity and workflow controls left,
+          file actions right. */}
+      <div className="w-full border-b border-border">
+        <div className="mx-auto w-full max-w-7xl px-4 py-3">
+          <div className="flex items-center justify-between gap-4">
+            {/* Identity and workflow controls: invoice title, number,
+                status, currency. File actions sit in the right-hand
+                cluster so they stay pushed to the trailing edge. */}
+            <div className="flex items-center gap-3">
+              <h1 className="flex h-8 items-center text-md font-bold whitespace-nowrap text-foreground">
+                Invoice
+              </h1>
+              <ReadOnlyRegion editable={canEdit} className="min-w-[200px]">
+                <TextInput
+                  className="h-8 text-xs border-border"
+                  placeholder={"Add invoice number"}
+                  value={invoiceNoField.value}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    invoiceNoField.setValue(val);
+                    // Clear previous error if now has a value (so stale warning disappears from input)
+                    // Do NOT dispatch here — dispatch only onBlur per project rules (see CLAUDE.md)
+                    if (
+                      val &&
+                      val.trim() !== "" &&
+                      validations.invoice &&
+                      !validations.invoice.isValid
+                    ) {
+                      setField("invoice", {
+                        isValid: true,
+                        message: "",
+                        severity: "none",
+                      });
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    if (state?.invoiceNo !== val) {
+                      dispatch(actions.editInvoice({ invoiceNo: val }));
+                    }
+                  }}
+                  warnings={toInputWarnings(validations.invoice)}
+                  onKeyDown={focusNextOnEnter}
+                />
+              </ReadOnlyRegion>
+
+              {/* Status stays editable in every status — it is the workflow
+                  control that unlocks or locks everything else. */}
+              <SelectField
+                options={STATUS_OPTIONS}
+                value={state.status}
+                onChange={(value) => handleStatusChange(value as Status)}
+              />
+
+              <ReadOnlyRegion editable={canEdit}>
+                {/* Bounded width on purpose: w-full made the currency select
+                    span the row and wrap onto a second line. */}
+                <div className="w-36">
+                  <Select
+                    options={currencyList.map((c) => ({
+                      label: c.ticker,
+                      value: c.ticker,
+                    }))}
+                    value={state.currency}
+                    placeholder="Currency"
+                    searchable
+                    onChange={(value) =>
+                      handleCurrencyChange(
+                        (Array.isArray(value) ? value[0] : value) || "",
+                      )
+                    }
+                    warnings={toInputWarnings(validations.currency)}
+                    className="h-8 text-xs text-foreground border-border"
+                    contentClassName="w-48 bg-popover border border-border"
+                  />
+                </div>
+              </ReadOnlyRegion>
+            </div>
+
+            {/* File actions, pushed right: export is second from right,
+                view/upload sits far right. The upload slot renders either
+                "Upload File" or "View Uploaded Invoice" - never both. */}
+            <div className="flex items-center gap-3">
+              {/* Export Dropdown Button */}
+              <div className="relative" ref={exportDropdown.ref}>
+                <button
+                  onClick={exportDropdown.toggle}
+                  className="inline-flex items-center h-8 px-3 rounded text-xs border border-input bg-background text-foreground hover:bg-accent font-medium transition-colors whitespace-nowrap cursor-pointer"
+                >
+                  Export File
+                  <svg
+                    className="w-4 h-4 ml-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M19 9l-7 7-7-7"
+                    ></path>
+                  </svg>
+                </button>
+
+                {exportDropdown.isOpen && (
+                  <div className="absolute z-10 mt-1 w-48 rounded-md shadow-lg bg-popover text-popover-foreground border border-border">
+                    <div
+                      className="py-1"
+                      role="menu"
+                      aria-orientation="vertical"
+                    >
+                      <button
+                        onClick={() => {
+                          handleExportUBL();
+                          exportDropdown.close();
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-accent cursor-pointer"
+                      >
+                        Export UBL
+                      </button>
+                      <button
+                        onClick={() => {
+                          pdf.handleExportPDF();
+                          exportDropdown.close();
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-accent cursor-pointer"
+                      >
+                        Export PDF
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Upload File  ↔  View Uploaded Invoice (once a base invoice is attached) */}
+              {baseInvoiceRef ? (
+                <button
+                  onClick={handleViewUpload}
+                  aria-pressed={isSplitOpen}
+                  disabled={viewer.isLoading}
+                  className="inline-flex items-center h-8 px-3 rounded text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors whitespace-nowrap cursor-pointer disabled:opacity-60"
+                >
+                  {viewer.isLoading
+                    ? "Loading…"
+                    : isSplitOpen
+                      ? "Hide Uploaded Invoice"
+                      : "View Uploaded Invoice"}
+                  <svg
+                    className="w-4 h-4 ml-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    ></path>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                    ></path>
+                  </svg>
+                </button>
+              ) : canEdit ? (
+                <div className="relative" ref={uploadDropdown.ref}>
+                  <button
+                    onClick={uploadDropdown.toggle}
+                    className="inline-flex items-center h-8 px-3 rounded text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors whitespace-nowrap cursor-pointer"
+                    disabled={pdf.isPdfLoading}
+                  >
+                    {pdf.isPdfLoading ? "Processing..." : "Upload File"}
+                    <svg
+                      className="w-4 h-4 ml-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M19 9l-7 7-7-7"
+                      ></path>
+                    </svg>
+                  </button>
+
+                  {uploadDropdown.isOpen && !pdf.isPdfLoading && (
+                    <div className="absolute z-10 mt-1 w-48 rounded-md shadow-lg bg-popover text-popover-foreground border border-border">
+                      <div
+                        className="py-1"
+                        role="menu"
+                        aria-orientation="vertical"
+                      >
+                        <label className="block px-4 py-2 text-sm text-foreground hover:bg-accent cursor-pointer">
+                          Upload UBL
+                          <input
+                            accept=".xml"
+                            className="hidden"
+                            onChange={(e) => {
+                              handleFileUpload(e);
+                              uploadDropdown.close();
+                            }}
+                            type="file"
+                          />
+                        </label>
+                        <PDFUploader
+                          changeDropdownOpen={(open) => {
+                            if (!open) uploadDropdown.close();
+                            else uploadDropdown.toggle();
+                          }}
+                          onUploadComplete={pdf.handlePdfUploadComplete}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
       </div>
+
+      {isSplitOpen && viewer.url !== null ? (
+        // `fillViewport` bounds the split to the remaining window height, so
+        // each side scrolls inside its own box. Without it a multi-page PDF
+        // stretches the pane and drags the invoice editor down with it.
+        <SplitPane
+          fillViewport
+          storageKey="invoice-editor:compare-split-pct"
+          left={<div className="w-full px-4 py-6">{invoiceBody}</div>}
+          right={
+            <PdfPane
+              url={viewer.url}
+              fileName={state.invoiceNo}
+              onClose={closeSplit}
+            />
+          }
+        />
+      ) : (
+        <div className="flex-1 max-w-7xl mx-auto w-full mt-6 px-4 pb-8">
+          {invoiceBody}
+        </div>
+      )}
 
       <PartyFormModal
         open={openParty === "issuer"}
@@ -859,7 +967,7 @@ export default function Editor() {
 
       {/* Read-only preview of the stored base invoice PDF ("View Uploaded Invoice") */}
       <PDFReviewModal
-        open={viewer.url !== null}
+        open={viewer.url !== null && !isSplitOpen}
         viewOnly
         pdfUrl={viewer.url}
         base64Pdf={null}

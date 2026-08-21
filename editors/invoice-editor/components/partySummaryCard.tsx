@@ -1,4 +1,10 @@
 import { Pencil } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
+import {
+  PaymentDetailsRows,
+  hasPaymentDetails,
+} from "./paymentDetails.js";
 import type { LegalEntity } from "document-models/invoice";
 
 interface PartySummaryCardProps {
@@ -59,6 +65,7 @@ export function PartySummaryCard({
     .filter((part) => part?.trim())
     .join(", ");
   const email = entity?.contactInfo?.email ?? "";
+  const [showPayment, setShowPayment] = useState(false);
   const name = entity?.name ?? "";
   const isEmpty = ![name, taxId, location, email].some((v) => v.trim());
 
@@ -104,6 +111,37 @@ export function PartySummaryCard({
           </dl>
         </div>
       )}
+
+      {/* Payment routing sits behind a disclosure, collapsed by default: it is
+          the largest block on the card and expanding it by default pushed the
+          line items off the bottom of the pane. */}
+      <div className="mt-3 border-t border-border pt-2">
+        <button
+          type="button"
+          onClick={() => setShowPayment((open) => !open)}
+          aria-expanded={showPayment}
+          className="flex w-full items-center justify-between gap-2 rounded px-1 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
+        >
+          <span>
+            Payment details
+            {!hasPaymentDetails(entity) && (
+              <span className="ml-1 font-normal">(none)</span>
+            )}
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 transition-transform ${
+              showPayment ? "rotate-180" : ""
+            }`}
+            aria-hidden
+          />
+        </button>
+
+        {showPayment && (
+          <div className="mt-2 px-1">
+            <PaymentDetailsRows entity={entity} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
