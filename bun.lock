@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@powerhousedao/paperless-invoice",
+      "name": "@powerhousedao/billing",
       "dependencies": {
         "@react-pdf/renderer": "^4.5.1",
         "ethers": "^6.17.0",

@@ -20,7 +20,16 @@
       "Bash(curl -s -m 25 -X POST http://localhost:4001/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"getDocument\",\"arguments\":{\"id\":\"dd9db0f6-b0ea-46ef-8892-1fd192b69f4c\"}}}' -o /tmp/doc2.out)",
       "Bash(npx oxlint *)",
       "Bash(python3 -c ' *)",
-      "Bash(unzip -p backup-documents/Invoice.phd header.json)"
+      "Bash(unzip -p backup-documents/Invoice.phd header.json)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{url_effective}\\\\n\" -L \"https://noble-moth-7a63b1b7-connect.vetra.io/\" --max-time 20)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" \"https://noble-moth-7a63b1b7-switchboard.vetra.io/graphql\" -H 'content-type: application/json' -d '{\"query\":\"{ __typename }\"}' --max-time 20)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" \"https://noble-moth-7a63b1b7-switchboard.vetra.io/d/paperless\" -H 'content-type: application/json' -d '{\"query\":\"{ drive { name slug icon } }\"}' --max-time 20)",
+      "Bash(curl -s https://noble-moth-7a63b1b7-switchboard.vetra.io/d/paperless -H 'content-type: application/json' -d '{\"query\":\"{ drive { name nodes { ... on DocumentDrive_FolderNode { id name kind } ... on DocumentDrive_FileNode { id name kind documentType } } } }\"}' --max-time 20)",
+      "Bash(grep -oE \">[A-Za-z /]{3,24}<\" editors/billing/components/InvoiceTable/InvoiceTableSection.tsx)",
+      "Bash(exit 1)",
+      "Bash(gh auth *)",
+      "Bash(gh repo *)",
+      "Bash(git ls-remote *)"
     ],
     "additionalDirectories": [
       "/home/p/Powerhouse/demos/invoice"

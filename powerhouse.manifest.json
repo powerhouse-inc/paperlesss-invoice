@@ -1,6 +1,6 @@
 {
-  "name": "@powerhousedao/paperless-invoice",
-  "description": "Paperless Invoice Editor",
+  "name": "@powerhousedao/billing",
+  "description": "Billing Invoice Editor",
   "category": "finance",
   "publisher": {
     "name": "Powerhouse",
