@@ -76,10 +76,17 @@ function extractErrorMessage(errorMsg: string): string {
  * invoice payload to the document. Exported so the editor (which now owns
  * the review modal state) can call it from its Accept handler.
  */
+export interface ApplyExtractedInvoiceReport {
+  lineItemsOffered: number;
+  lineItemsDispatched: number;
+  /** One entry per line item that was not dispatched, with the reason. */
+  lineItemsSkipped: { description: string; reason: string }[];
+}
+
 export function applyExtractedInvoice(
   dispatch: (action: InvoiceAction) => void,
   invoiceData: Record<string, any>,
-) {
+): ApplyExtractedInvoiceReport {
   dispatch(
     actions.editInvoice({
       invoiceNo: invoiceData.invoiceNo || "",
@@ -91,35 +98,89 @@ export function applyExtractedInvoice(
     }),
   );
 
-  if (invoiceData.lineItems && invoiceData.lineItems.length > 0) {
-    invoiceData.lineItems.forEach((item: any) => {
-      dispatch(
-        actions.addLineItem({
-          id: item.id,
-          description: item.description,
-          taxPercent: item.taxPercent,
-          quantity: item.quantity,
-          currency: item.currency,
-          unitPriceTaxExcl: item.unitPriceTaxExcl,
-          unitPriceTaxIncl: item.unitPriceTaxIncl,
-          totalPriceTaxExcl: item.totalPriceTaxExcl,
-          totalPriceTaxIncl: item.totalPriceTaxIncl,
-        }),
-      );
+  const asRecord = (value: unknown): Record<string, unknown> =>
+    typeof value === "object" && value !== null
+      ? (value as Record<string, unknown>)
+      : {};
+  const asText = (value: unknown): string =>
+    typeof value === "string" ? value : "";
 
-      if (item.lineItemTag && Array.isArray(item.lineItemTag)) {
-        item.lineItemTag.forEach((tag: any) => {
-          dispatch(
-            actions.setLineItemTag({
-              lineItemId: item.id,
-              dimension: tag.dimension,
-              value: tag.value,
-              label: tag.label,
-            }),
-          );
-        });
-      }
+  const offered: unknown[] = Array.isArray(invoiceData.lineItems)
+    ? (invoiceData.lineItems as unknown[])
+    : [];
+  const report: ApplyExtractedInvoiceReport = {
+    lineItemsOffered: offered.length,
+    lineItemsDispatched: 0,
+    lineItemsSkipped: [],
+  };
+
+  // Fields are narrowed rather than read off an `any`: they all come from an
+  // LLM, so each is genuinely unknown until checked, and an `any` would hide
+  // exactly the malformed values this guard exists to catch.
+  for (const entry of offered) {
+    const item = asRecord(entry);
+    const description = asText(item.description);
+    const label = description.slice(0, 60) || "(no description)";
+
+    // Structural guard only. The price *relations* are the reducer's job —
+    // re-checking the tax arithmetic here would duplicate it and drift.
+    const id = asText(item.id);
+    if (!id) {
+      report.lineItemsSkipped.push({ description: label, reason: "missing id" });
+      continue;
+    }
+
+    const numericFields = [
+      "quantity",
+      "taxPercent",
+      "unitPriceTaxExcl",
+      "unitPriceTaxIncl",
+      "totalPriceTaxExcl",
+      "totalPriceTaxIncl",
+    ] as const;
+    const badField = numericFields.find((field) => {
+      const value = item[field];
+      return typeof value !== "number" || !Number.isFinite(value);
     });
+    if (badField) {
+      report.lineItemsSkipped.push({
+        description: label,
+        reason: `${badField} is not a finite number`,
+      });
+      continue;
+    }
+
+    report.lineItemsDispatched += 1;
+    dispatch(
+      actions.addLineItem({
+        id,
+        description,
+        currency: asText(item.currency),
+        quantity: item.quantity as number,
+        taxPercent: item.taxPercent as number,
+        unitPriceTaxExcl: item.unitPriceTaxExcl as number,
+        unitPriceTaxIncl: item.unitPriceTaxIncl as number,
+        totalPriceTaxExcl: item.totalPriceTaxExcl as number,
+        totalPriceTaxIncl: item.totalPriceTaxIncl as number,
+      }),
+    );
+
+    if (Array.isArray(item.lineItemTag)) {
+      for (const rawTag of item.lineItemTag as unknown[]) {
+        const tag = asRecord(rawTag);
+        const dimension = asText(tag.dimension);
+        const value = asText(tag.value);
+        if (!dimension || !value) continue;
+        dispatch(
+          actions.setLineItemTag({
+            lineItemId: id,
+            dimension,
+            value,
+            label: asText(tag.label),
+          }),
+        );
+      }
+    }
   }
 
   if (invoiceData.issuer) {
@@ -198,6 +259,21 @@ export function applyExtractedInvoice(
     // Payer payment routing intentionally not dispatched — the payer is the
     // party SENDING funds, so their bank/wallet doesn't belong on the invoice.
   }
+
+  // This loop used to dispatch and move on, so a rejected item left an `.error`
+  // on the operation, state unchanged, and the UI still reported success — ten
+  // extracted line items could become two silently.
+  if (report.lineItemsSkipped.length > 0) {
+    console.warn(
+      `applyExtractedInvoice: dispatched ${report.lineItemsDispatched} of ` +
+        `${report.lineItemsOffered} line items; skipped ` +
+        report.lineItemsSkipped
+          .map((skipped) => `"${skipped.description}" (${skipped.reason})`)
+          .join(", "),
+    );
+  }
+
+  return report;
 }
 
 export default function PDFUploader({

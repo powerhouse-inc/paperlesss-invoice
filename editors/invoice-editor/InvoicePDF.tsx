@@ -735,7 +735,6 @@ const PaymentSectionFiat: React.FC<{
   paymentRouting: Maybe<PaymentRouting>;
 }> = ({ paymentRouting }) => {
   if (!paymentRouting) return null;
-  console.log("paymentRouting", paymentRouting.bank);
   return (
     <View style={[styles.gridContainer, { marginTop: 0, marginLeft: 0 }]}>
       <View style={styles.gridColumn}>

@@ -148,31 +148,100 @@ describe("ItemsOperations", () => {
       );
     });
 
-    it("throws when tax inclusive/exclusive totals fail comparison after quantity amplification", () => {
-      // unitPriceTaxExcl is off from unitPriceTaxIncl by just under EPSILON
-      // (9e-6 < 1e-5), so check 1 passes. A very large quantity amplifies
-      // that sub-epsilon per-unit drift into a multi-unit gap that check 4
-      // (comparing the two computed *totals*) can detect, even though the
-      // per-unit prices individually look "close enough".
+    it("normalises sub-cent per-unit drift instead of rejecting it, even at huge quantity", () => {
+      // A 9e-6 per-unit discrepancy is far below the cent granularity invoices
+      // are stated in, so it is acceptable input rather than an error. It used
+      // to be rejected once a large quantity amplified it into a multi-unit
+      // gap; now applyInvariants re-derives the values so the drift cannot
+      // reach state at all.
       const document = utils.createDocument();
       const quantity = 2_000_000;
-      const unitPriceTaxIncl = 10;
       const unitPriceTaxExcl = 10.000009;
       const item: AddLineItemInput = {
         ...validLineItem(),
         taxPercent: 0,
         quantity,
         unitPriceTaxExcl,
-        unitPriceTaxIncl,
+        unitPriceTaxIncl: 10,
         totalPriceTaxExcl: quantity * unitPriceTaxExcl,
-        totalPriceTaxIncl: quantity * unitPriceTaxIncl,
+        totalPriceTaxIncl: quantity * 10,
+      };
+
+      const updated = reducer(document, addLineItem(item));
+      const stored = updated.state.global.lineItems[0];
+
+      expect(updated.operations.global[0].error).toBeUndefined();
+      expect(updated.state.global.lineItems).toHaveLength(1);
+      // At 0% tax the inclusive price must equal the exclusive one exactly.
+      expect(stored.unitPriceTaxIncl).toBe(unitPriceTaxExcl);
+      expect(stored.totalPriceTaxExcl).toBe(quantity * unitPriceTaxExcl);
+      expect(stored.totalPriceTaxIncl).toBe(quantity * unitPriceTaxExcl);
+    });
+
+    it("accepts cent-rounded taxed prices that the old epsilon rejected", () => {
+      // The regression that made extraction silently lose line items: 19.99 at
+      // 21% has an inclusive price of 24.19, and 24.19 / 1.21 = 19.9917, which
+      // is 8.3e-4 away from 19.99 — 83x the old 1e-5 tolerance. Only zero-tax
+      // lines used to survive.
+      const document = utils.createDocument();
+      const quantity = 7;
+      const item: AddLineItemInput = {
+        ...validLineItem(),
+        taxPercent: 21,
+        quantity,
+        unitPriceTaxExcl: 19.99,
+        unitPriceTaxIncl: 24.19,
+        totalPriceTaxExcl: 139.93,
+        totalPriceTaxIncl: 169.33,
+      };
+
+      const updated = reducer(document, addLineItem(item));
+
+      expect(updated.operations.global[0].error).toBeUndefined();
+      expect(updated.state.global.lineItems).toHaveLength(1);
+      // Stored values are re-derived, so they are exactly consistent.
+      const stored = updated.state.global.lineItems[0];
+      expect(stored.unitPriceTaxIncl).toBeCloseTo(19.99 * 1.21, 10);
+      expect(stored.totalPriceTaxExcl).toBeCloseTo(quantity * 19.99, 10);
+    });
+
+    it("still rejects a stated total that is wrong by more than a cent per unit", () => {
+      const document = utils.createDocument();
+      const item: AddLineItemInput = {
+        ...validLineItem(),
+        taxPercent: 0,
+        quantity: 2,
+        unitPriceTaxExcl: 100,
+        unitPriceTaxIncl: 100,
+        totalPriceTaxExcl: 250, // should be 200
+        totalPriceTaxIncl: 200,
       };
 
       const updated = reducer(document, addLineItem(item));
 
       expect(updated.state.global.lineItems).toHaveLength(0);
       expect(updated.operations.global[0].error).toBe(
-        "Tax inclusive/exclusive totals failed comparison.",
+        "Calculated unitPriceTaxExcl does not match input total",
+      );
+    });
+
+    it("still rejects unit prices whose tax relation is off by more than a cent", () => {
+      const document = utils.createDocument();
+      const item: AddLineItemInput = {
+        ...validLineItem(),
+        taxPercent: 10,
+        quantity: 1,
+        unitPriceTaxExcl: 100,
+        unitPriceTaxIncl: 150, // implies 50% tax, not 10%
+        totalPriceTaxExcl: 100,
+        totalPriceTaxIncl: 150,
+      };
+
+      const updated = reducer(document, addLineItem(item));
+
+      expect(updated.state.global.lineItems).toHaveLength(0);
+      expect(updated.operations.global[0].error).toBe(
+        "Tax inclusive/exclusive unit prices failed comparison.",
       );
     });
   });

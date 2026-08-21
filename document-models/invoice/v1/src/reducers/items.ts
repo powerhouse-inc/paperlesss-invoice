@@ -34,6 +34,10 @@ export const invoiceItemsOperations: InvoiceItemsOperations = {
       throw new Error("Duplicate input.id");
 
     validatePrices(item);
+    // Normalise before storing, exactly as editLineItem does. validatePrices
+    // now accepts cent-rounded input, so without this an added item could
+    // persist values that disagree in the last decimal place.
+    applyInvariants(item);
     state.lineItems.push(item);
     updateTotals(state);
   },
@@ -130,67 +134,108 @@ function updateTotals(state: InvoiceState) {
   }, 0.0);
 }
 
+/**
+ * Largest error a single money value can legitimately carry once it has been
+ * rounded to cents, which is how invoices — and the humans and LLMs reading
+ * them — state prices. Both sides of each comparison may be independently
+ * rounded, so the budget is a full cent rather than half of one.
+ */
+const CENT = 0.01;
+
+/**
+ * Tolerance for comparing two money values.
+ *
+ * `units` is the quantity the per-unit rounding error is multiplied across: a
+ * unit price rounded by up to a cent becomes a line total off by up to a cent
+ * *per unit*, so the tolerance has to scale with quantity or high-quantity
+ * lines fail for arithmetic that is in fact correct.
+ */
+const moneyTolerance = (units: number) => CENT * Math.max(1, Math.abs(units));
+
+/**
+ * Rejects a line item whose quantity/unit/total relations genuinely disagree.
+ *
+ * Tolerances are in cents, not floating-point epsilons. An earlier version
+ * compared with EPSILON = 0.00001, which is six orders of magnitude tighter
+ * than the rounding real invoices carry, so it rejected ordinary data: at 21%
+ * tax a unit price of 19.99 has an inclusive price of 24.19, and 24.19 / 1.21
+ * is 19.9917 — 8.3e-4 away from 19.99, i.e. 83x that tolerance. Only prices
+ * whose inclusive value divided back exactly survived, which in practice meant
+ * only zero-tax lines. Because the ingest path dispatches without inspecting
+ * the result, those rejections were invisible: an extraction offering ten line
+ * items would store two and report success.
+ *
+ * Being liberal here is safe because `applyInvariants` runs immediately after
+ * and re-derives the stored values exactly, so accepted-but-rounded input is
+ * normalised rather than persisted as-is.
+ */
 function validatePrices(item: InvoiceLineItem) {
-  const EPSILON = 0.00001;
+  const taxRate = item.taxPercent / 100;
 
   const calcPriceIncl = item.quantity * item.unitPriceTaxIncl;
   const calcPriceExcl = item.quantity * item.unitPriceTaxExcl;
 
-  const taxRate = item.taxPercent / 100;
+  const unitTolerance = moneyTolerance(1);
+  const totalTolerance = moneyTolerance(item.quantity);
 
-  const isClose = (a: number, b: number) => Math.abs(a - b) < EPSILON;
+  const differs = (a: number, b: number, tolerance: number) =>
+    Math.abs(a - b) > tolerance;
 
-  const expectedUnitPriceExcl = item.unitPriceTaxIncl / (1 + taxRate);
-  if (!isClose(item.unitPriceTaxExcl, expectedUnitPriceExcl)) {
+  if (
+    differs(
+      item.unitPriceTaxExcl,
+      item.unitPriceTaxIncl / (1 + taxRate),
+      unitTolerance,
+    )
+  ) {
     throw new Error("Tax inclusive/exclusive unit prices failed comparison.");
   }
 
-  if (!isClose(calcPriceIncl, item.totalPriceTaxIncl)) {
+  if (differs(calcPriceIncl, item.totalPriceTaxIncl, totalTolerance)) {
     throw new Error("Calculated unitPriceTaxIncl does not match input total");
   }
 
-  if (!isClose(calcPriceExcl, item.totalPriceTaxExcl)) {
+  if (differs(calcPriceExcl, item.totalPriceTaxExcl, totalTolerance)) {
     throw new Error("Calculated unitPriceTaxExcl does not match input total");
   }
 
-  const expectedTotalPriceExcl = calcPriceIncl / (1 + taxRate);
-  if (!isClose(calcPriceExcl, expectedTotalPriceExcl)) {
-    throw new Error("Tax inclusive/exclusive totals failed comparison.");
-  }
+  // There is deliberately no fourth check comparing the two *totals* against
+  // each other. `qty * excl` vs `(qty * incl) / (1 + taxRate)` differs by
+  // `qty * |excl - incl / (1 + taxRate)|`, and its tolerance is `CENT * qty`,
+  // so it fails on exactly the same condition as the unit-price check above —
+  // it can never fire once that has passed. The old code had one because a
+  // fixed absolute epsilon made the multiplied form more sensitive than the
+  // per-unit form; with a per-unit tolerance that asymmetry is gone.
 }
 
 /**
- * Normalizes the float representation of an already-validated line item.
+ * Normalises the float representation of an already-validated line item.
  *
- * `validatePrices` runs immediately before this and rejects any item whose
- * quantity/unit/total relations disagree beyond EPSILON, so the only
- * discrepancies that can survive to here come from the *direction* in which a
- * relation is evaluated: validation compares `unitPriceTaxIncl / (1 + taxRate)`
- * against `unitPriceTaxExcl`, whereas the multiplied form
- * `unitPriceTaxExcl * (1 + taxRate)` can land more than EPSILON away from
- * `unitPriceTaxIncl` for the same numbers. The block below re-derives the
- * multiplied form so stored values stay internally consistent.
+ * `validatePrices` runs immediately before this and accepts money values that
+ * have been rounded to cents, so the values arriving here may legitimately
+ * disagree in the last decimal place. This re-derives the inclusive unit price
+ * and both totals from `unitPriceTaxExcl` and `taxPercent`, which are the two
+ * fields an invoice states most reliably, so what gets stored is internally
+ * consistent regardless of how the input was rounded.
  *
- * Only that one direction needs correcting. The inverse check
- * (`unitPriceTaxIncl / (1 + taxRate)` vs `unitPriceTaxExcl`) is intentionally
- * absent: untouched, it merely restates a `validatePrices` assertion, and after
- * the correction below it is an exact round-trip. A sweep of 5165 valid items
- * across tax rates 0-27% and magnitudes 1e0-1e14 never once satisfied it.
+ * Only that one direction is corrected. The inverse relation
+ * (`unitPriceTaxIncl / (1 + taxRate)` vs `unitPriceTaxExcl`) needs no fixing:
+ * after the re-derivation below it is an exact round-trip.
+ *
+ * Runs on both add and edit — an item that skipped normalisation on the way in
+ * would carry the input's rounding into state and could then fail a later
+ * comparison against its own stored values.
  */
 const applyInvariants = (nextItem: InvoiceLineItem) => {
-  const EPSILON = 0.00001;
-
-  const isClose = (a: number, b: number) => Math.abs(a - b) < EPSILON;
-
-  const hasChanged = (oldValue: number, newValue: number) =>
-    !isClose(oldValue, newValue);
-
+  // Unconditional rather than "only if it looks changed". A conditional guard
+  // needs a threshold, and any threshold lets drift smaller than itself survive
+  // into state — which is how a 9e-6 per-unit discrepancy could persist and
+  // then show up as a multi-unit gap once multiplied by a large quantity.
+  // Re-deriving every time means stored values are always exactly consistent
+  // with `unitPriceTaxExcl` and `taxPercent`, whatever rounding the input had.
   const taxRate = nextItem.taxPercent / 100;
 
-  const expectedUnitPriceTaxIncl = nextItem.unitPriceTaxExcl * (1 + taxRate);
-  if (hasChanged(expectedUnitPriceTaxIncl, nextItem.unitPriceTaxIncl)) {
-    nextItem.unitPriceTaxIncl = nextItem.unitPriceTaxExcl * (1 + taxRate);
-    nextItem.totalPriceTaxExcl = nextItem.quantity * nextItem.unitPriceTaxExcl;
-    nextItem.totalPriceTaxIncl = nextItem.quantity * nextItem.unitPriceTaxIncl;
-  }
+  nextItem.unitPriceTaxIncl = nextItem.unitPriceTaxExcl * (1 + taxRate);
+  nextItem.totalPriceTaxExcl = nextItem.quantity * nextItem.unitPriceTaxExcl;
+  nextItem.totalPriceTaxIncl = nextItem.quantity * nextItem.unitPriceTaxIncl;
 };
